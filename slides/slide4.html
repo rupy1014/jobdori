@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body {
+  margin: 0;
+  width: 720pt;
+  height: 405pt;
+  background: #181B24;
+  font-family: Arial, sans-serif;
+  padding: 70pt 50pt 100pt 50pt;
+  box-sizing: border-box;
+}
+h1 {
+  color: #B165FB;
+  font-size: 32pt;
+  font-weight: bold;
+  margin: 0 0 35pt 0;
+  text-align: center;
+}
+.stages {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  gap: 20pt;
+}
+.stage {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8pt;
+  padding: 15pt;
+  text-align: center;
+}
+.stage.current {
+  background: rgba(177,101,251,0.15);
+  border: 3pt solid #B165FB;
+}
+.number {
+  color: #B165FB;
+  font-size: 36pt;
+  font-weight: bold;
+  margin: 0 0 10pt 0;
+}
+.stage h2 {
+  color: #FFFFFF;
+  font-size: 18pt;
+  font-weight: bold;
+  margin: 0 0 8pt 0;
+}
+.stage p {
+  color: rgba(255,255,255,0.6);
+  font-size: 13pt;
+  margin: 0;
+}
+.footer {
+  margin-top: 30pt;
+  text-align: center;
+}
+.footer p {
+  color: #40695B;
+  font-size: 16pt;
+  font-weight: bold;
+  margin: 0;
+}
+</style>
+</head>
+<body>
+<h1>기회는 지금입니다!</h1>
+<div class="stages">
+  <div class="stage current">
+    <p class="number">1</p>
+    <h2>대화형 AI</h2>
+    <p>← 현재</p>
+  </div>
+  <div class="stage">
+    <p class="number">2</p>
+    <h2>추론 AI</h2>
+    <p>← 거의 도달</p>
+  </div>
+  <div class="stage">
+    <p class="number">3+</p>
+    <h2>에이전트</h2>
+    <p>← 다음</p>
+  </div>
+</div>
+<div class="footer">
+  <p>5단계까지 가면 누구나. 지금은 아는 사람만!</p>
+</div>
+</body>
+</html>

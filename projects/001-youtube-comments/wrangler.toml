@@ -1,0 +1,48 @@
+# YouTube 댓글 자동 응답 봇 - Cloudflare Workers 설정
+name = "youtube-reply-bot"
+main = "src/index.ts"
+compatibility_date = "2024-11-25"
+
+# 매일 자동 실행 (09:00 KST = 00:00 UTC)
+[triggers]
+crons = ["0 0 * * *"]
+
+# 개발 환경 변수
+[vars]
+ENVIRONMENT = "development"
+
+# KV 네임스페이스 (댓글 저장용)
+# wrangler kv:namespace create COMMENTS_KV 실행 후 id 입력
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# 개발 환경
+[env.development]
+name = "youtube-reply-bot-dev"
+vars = { ENVIRONMENT = "development" }
+
+[[env.development.kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# 프로덕션 환경
+[env.production]
+name = "youtube-reply-bot"
+vars = { ENVIRONMENT = "production" }
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "your-production-kv-namespace-id"
+
+# Secrets (wrangler secret put 으로 설정)
+# ADMIN_PASSWORD - Basic Auth 비밀번호
+# YOUTUBE_API_KEY - YouTube Data API 키
+# YOUTUBE_CHANNEL_ID - 내 채널 ID
+# YOUTUBE_ACCESS_TOKEN - OAuth access token
+# YOUTUBE_REFRESH_TOKEN - OAuth refresh token
+# YOUTUBE_CLIENT_ID - OAuth client id
+# YOUTUBE_CLIENT_SECRET - OAuth client secret
+# CLAUDE_API_KEY - Claude API 키

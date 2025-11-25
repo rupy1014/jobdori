@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body {
+  margin: 0;
+  width: 720pt;
+  height: 405pt;
+  background: #FFFFFF;
+  font-family: Arial, sans-serif;
+  padding: 40pt 50pt 60pt 50pt;
+  box-sizing: border-box;
+}
+h1 {
+  color: #B165FB;
+  font-size: 36pt;
+  font-weight: bold;
+  margin: 0 0 30pt 0;
+  text-align: center;
+}
+.comparison {
+  display: flex;
+  gap: 30pt;
+}
+.column {
+  flex: 1;
+}
+h2 {
+  color: #181B24;
+  font-size: 24pt;
+  font-weight: bold;
+  margin: 0 0 10pt 0;
+  text-align: center;
+  padding-bottom: 10pt;
+}
+.h2-divider {
+  height: 3pt;
+  background: #e0e0e0;
+  margin: 0 0 20pt 0;
+}
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+li {
+  color: #181B24;
+  font-size: 14pt;
+  margin-bottom: 15pt;
+  padding-left: 30pt;
+  position: relative;
+  line-height: 1.4;
+}
+.left li:before {
+  content: "❌";
+  position: absolute;
+  left: 0;
+  font-size: 18pt;
+}
+.right li:before {
+  content: "✅";
+  position: absolute;
+  left: 0;
+  font-size: 18pt;
+}
+.highlight {
+  background: #40695B;
+  color: #FFFFFF;
+  padding: 6pt 15pt;
+  border-radius: 8pt;
+  text-align: center;
+  margin-top: 5pt;
+}
+.highlight p {
+  font-size: 13pt;
+  font-weight: bold;
+  margin: 0;
+  color: #FFFFFF;
+}
+</style>
+</head>
+<body>
+<h1>Web UI vs Claude Code</h1>
+<div class="comparison">
+  <div class="column left">
+    <h2>ChatGPT 웹사이트</h2>
+    <div class="h2-divider"></div>
+    <ul>
+      <li>매번 맥락을 다시 설명해야 함</li>
+      <li>내 파일/프로젝트 상황을 모름</li>
+      <li>범용적인 답변만 나옴</li>
+      <li>대화 길어지면 일관성 깨짐</li>
+      <li>앞 내용을 까먹음</li>
+    </ul>
+  </div>
+  <div class="column right">
+    <h2>Claude Code</h2>
+    <div class="h2-divider"></div>
+    <ul>
+      <li>내 컴퓨터 로컬 파일 직접 읽기</li>
+      <li>프로젝트 전체 구조 이해</li>
+      <li>계속 일관성 있는 답변</li>
+      <li>내 상황에 딱 맞는 답변</li>
+      <li>한 번 설정하면 계속 진화</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body {
+  margin: 0;
+  width: 720pt;
+  height: 405pt;
+  background: #FFFFFF;
+  font-family: Arial, sans-serif;
+  padding: 40pt 50pt;
+  box-sizing: border-box;
+}
+.header {
+  background: #B165FB;
+  color: #FFFFFF;
+  padding: 15pt 25pt;
+  margin: -40pt -50pt 30pt -50pt;
+}
+h1 {
+  font-size: 32pt;
+  font-weight: bold;
+  margin: 0;
+}
+.content {
+  display: flex;
+  gap: 30pt;
+}
+.column {
+  flex: 1;
+}
+h2 {
+  color: #40695B;
+  font-size: 18pt;
+  font-weight: bold;
+  margin: 0 0 15pt 0;
+  padding-bottom: 8pt;
+}
+.header-divider {
+  height: 3pt;
+  background: #40695B;
+  margin: -10pt 0 15pt 0;
+}
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+li {
+  color: #181B24;
+  font-size: 14pt;
+  margin-bottom: 10pt;
+  padding-left: 25pt;
+  position: relative;
+  line-height: 1.3;
+}
+li:before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #B165FB;
+  font-weight: bold;
+  font-size: 18pt;
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>AI가 실제로 할 수 있는 것들</h1>
+</div>
+<div class="content">
+  <div class="column">
+    <h2>콘텐츠 제작</h2>
+    <div class="header-divider"></div>
+    <ul>
+      <li>이미지 생성 (Midjourney, DALL-E)</li>
+      <li>영상 제작 (Sora - Text/Image to Video)</li>
+      <li>음성 합성 (내 목소리 복제 가능)</li>
+      <li>음악 작곡 (Suno, Udio)</li>
+      <li>글쓰기 (ChatGPT, Claude)</li>
+    </ul>
+  </div>
+  <div class="column">
+    <h2>비즈니스 자동화</h2>
+    <div class="header-divider"></div>
+    <ul>
+      <li>소프트웨어 개발 (Cursor, GitHub Copilot)</li>
+      <li>리서치 & 검색 (Perplexity)</li>
+      <li>영상 편집 (립싱크, 자막)</li>
+      <li>디자인 & UI/UX</li>
+      <li>데이터 분석 & 의사결정</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

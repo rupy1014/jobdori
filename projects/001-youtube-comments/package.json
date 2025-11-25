@@ -1,0 +1,27 @@
+{
+  "name": "youtube-reply-bot",
+  "version": "1.0.0",
+  "description": "YouTube 댓글 자동 응답 대시보드 - Cloudflare Workers",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev src/index.ts --port 8788 --no-live-reload",
+    "deploy": "wrangler deploy",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "kv:create": "wrangler kv:namespace create COMMENTS_KV",
+    "kv:create:preview": "wrangler kv:namespace create COMMENTS_KV --preview"
+  },
+  "dependencies": {
+    "hono": "^4.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240000.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^3.28.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
