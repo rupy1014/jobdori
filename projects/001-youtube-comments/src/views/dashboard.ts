@@ -176,6 +176,118 @@ export async function renderDashboard(env: Env): Promise<string> {
       cursor: not-allowed;
     }
 
+    .btn-edit-sm {
+      padding: 4px 10px;
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+
+    .btn-edit-sm:hover {
+      background: #4b5563;
+    }
+
+    /* 모달 스타일 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 600px;
+      border: 1px solid #333;
+    }
+
+    .modal h2 {
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .modal-comment {
+      background: #222;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .modal-comment strong {
+      color: #fff;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .modal textarea {
+      width: 100%;
+      height: 120px;
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 12px;
+      color: #fff;
+      font-size: 14px;
+      resize: vertical;
+      margin-bottom: 15px;
+    }
+
+    .modal textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .btn-cancel {
+      padding: 10px 20px;
+      background: #333;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-cancel:hover {
+      background: #444;
+    }
+
+    .btn-save {
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-save:hover {
+      background: #2563eb;
+    }
+
     .filter-tabs {
       display: flex;
       gap: 10px;
@@ -253,12 +365,12 @@ export async function renderDashboard(env: Env): Promise<string> {
     }
 
     .reply-preview {
-      max-width: 250px;
+      max-width: 300px;
       font-size: 12px;
       color: #888;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
     }
 
     .reply-preview.has-reply {
@@ -274,9 +386,20 @@ export async function renderDashboard(env: Env): Promise<string> {
 
     .comment-text {
       max-width: 400px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    .comment-text a,
+    .reply-preview a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    .comment-text a:hover,
+    .reply-preview a:hover {
+      text-decoration: underline;
     }
 
     .pagination {
@@ -343,6 +466,20 @@ export async function renderDashboard(env: Env): Promise<string> {
       color: #666;
     }
 
+    .btn-oauth {
+      padding: 6px 12px;
+      background: #333;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 12px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    .btn-oauth:hover {
+      background: #444;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -353,15 +490,230 @@ export async function renderDashboard(env: Env): Promise<string> {
       margin-bottom: 10px;
       font-size: 18px;
     }
+
+    /* 설정 섹션 스타일 */
+    .settings-section {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      border: 1px solid #333;
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      cursor: pointer;
+    }
+
+    .settings-header h2 {
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .settings-toggle {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .settings-content {
+      display: none;
+    }
+
+    .settings-content.show {
+      display: block;
+    }
+
+    .type-instructions {
+      display: grid;
+      gap: 20px;
+    }
+
+    .type-card {
+      background: #222;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid #333;
+    }
+
+    .type-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .type-card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .type-card-title .badge {
+      font-size: 14px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #444;
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: #10b981;
+    }
+
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+    }
+
+    .type-card label {
+      display: block;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .type-card textarea {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 10px;
+      color: #fff;
+      font-size: 13px;
+      resize: vertical;
+      margin-bottom: 12px;
+    }
+
+    .type-card textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .type-card textarea.instruction {
+      height: 50px;
+    }
+
+    .common-instructions {
+      background: #222;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      border: 1px solid #444;
+    }
+
+    .common-instructions label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .common-instructions textarea {
+      width: 100%;
+      height: 80px;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 10px;
+      color: #fff;
+      font-size: 13px;
+      resize: vertical;
+    }
+
+    .common-instructions textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .common-instructions .hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    .settings-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+    }
+
+    .btn-reset {
+      padding: 10px 20px;
+      background: #333;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-reset:hover {
+      background: #444;
+    }
+
+    .btn-save-settings {
+      padding: 10px 20px;
+      background: #10b981;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-save-settings:hover {
+      background: #059669;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>🤖 YouTube 댓글 자동 응답 봇</h1>
-      <span class="last-fetch">
-        마지막 동기화: ${lastFetchedAt ? new Date(lastFetchedAt).toLocaleString('ko-KR') : '없음'}
-      </span>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <span class="last-fetch">
+          마지막 동기화: ${lastFetchedAt ? new Date(lastFetchedAt).toLocaleString('ko-KR') : '없음'}
+        </span>
+        <a href="/oauth/start" class="btn-oauth" title="YouTube 권한 갱신">🔑 재인증</a>
+      </div>
     </header>
 
     <div class="stats">
@@ -406,6 +758,36 @@ export async function renderDashboard(env: Env): Promise<string> {
       </button>
     </div>
 
+    <!-- 응답 지침 설정 섹션 -->
+    <div class="settings-section">
+      <div class="settings-header" onclick="toggleSettings()">
+        <h2>⚙️ 분류별 응답 지침</h2>
+        <span class="settings-toggle" id="settingsToggle">▼ 펼치기</span>
+      </div>
+      <div class="settings-content" id="settingsContent">
+        <!-- 공통 지침 -->
+        <div class="common-instructions">
+          <label>📋 공통 응답 지침</label>
+          <textarea id="commonInstructions" placeholder="모든 댓글 유형에 공통으로 적용되는 지침을 입력하세요..."></textarea>
+          <p class="hint">모든 분류에 공통으로 적용됩니다. (예: 글자수 제한, 이모지 사용, 말투 등)</p>
+        </div>
+
+        <p style="color: #888; margin-bottom: 15px; font-size: 14px;">
+          <strong>분류별 추가 지침</strong> - 토글을 끄면 해당 유형은 응답을 생성하지 않습니다.
+        </p>
+        <div class="type-instructions" id="typeInstructions">
+          <!-- JS로 동적 생성 -->
+        </div>
+        <div class="settings-actions">
+          <button class="btn-reset" onclick="resetSettings()">기본값으로 초기화</button>
+          <button class="btn-save-settings" onclick="saveSettings()">
+            💾 설정 저장
+            <span class="loading" id="saveSettingsLoading">⏳</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="filter-tabs">
       <button class="filter-tab active" data-status="all" onclick="filterComments('all')">전체</button>
       <button class="filter-tab" data-status="unclassified" onclick="filterComments('unclassified')">미분류</button>
@@ -440,10 +822,28 @@ export async function renderDashboard(env: Env): Promise<string> {
 
   <div class="toast" id="toast"></div>
 
+  <!-- 수정 모달 -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <h2>✏️ 응답 수정</h2>
+      <div class="modal-comment">
+        <strong>원본 댓글:</strong>
+        <span id="modalOriginalComment"></span>
+      </div>
+      <textarea id="modalReplyText" placeholder="응답 내용을 입력하세요..."></textarea>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeEditModal()">취소</button>
+        <button class="btn-save" onclick="saveEditedReply()">저장</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentPage = 1;
     let currentStatus = 'all';
     const limit = 20;
+    let editingCommentId = null;
+    let commentsCache = [];
 
     // 인증 정보를 가져오는 함수 (현재 페이지의 Basic Auth 사용)
     function getAuthHeaders() {
@@ -459,9 +859,57 @@ export async function renderDashboard(env: Env): Promise<string> {
       });
     }
 
+    // 설정 캐시
+    let settingsCache = null;
+
+    // 기본 설정 (서버에서 가져올 수 없을 때 사용)
+    const DEFAULT_COMMON_INSTRUCTIONS = \`- 200자 이내로 짧게
+- 이모지 1-2개만
+- "안녕하세요" 같은 형식적 인사 금지
+- 절대 방어적이지 않게
+- 시청자 이름 언급하지 않기\`;
+
+    const DEFAULT_TYPE_INSTRUCTIONS = {
+      positive: {
+        enabled: true,
+        instruction: '진심어린 감사를 표현하세요. 응원이 큰 힘이 된다는 것을 전달하세요.'
+      },
+      negative: {
+        enabled: true,
+        instruction: '품위있게 대응하세요. 비판에서 배울 점이 있다면 인정하고, 악플은 짧게 마무리하세요.'
+      },
+      question: {
+        enabled: true,
+        instruction: '친절하고 전문적으로 답변하세요. 모르는 건 솔직히 모른다고 하고, 알아보겠다고 하세요.'
+      },
+      suggestion: {
+        enabled: true,
+        instruction: '제안에 감사하고 공감하세요. 좋은 아이디어는 반영하겠다고 하세요.'
+      },
+      reaction: {
+        enabled: true,
+        instruction: '가볍고 유머러스하게 반응하세요. 짧지만 따뜻하게!'
+      },
+      other: {
+        enabled: false,
+        instruction: '친근하게 응대하세요.'
+      }
+    };
+
+    // 유형별 라벨
+    const TYPE_LABELS = {
+      positive: { label: '긍정', desc: '칭찬, 응원, 감사 댓글' },
+      negative: { label: '부정', desc: '비난, 악플, 불만 댓글' },
+      question: { label: '질문', desc: '궁금한 점, 도움 요청' },
+      suggestion: { label: '제안', desc: '콘텐츠 요청, 개선점' },
+      reaction: { label: '반응', desc: '단순 반응 (ㅋㅋ, 와 등)' },
+      other: { label: '기타', desc: '분류되지 않는 기타 댓글' }
+    };
+
     // 페이지 로드시 댓글 불러오기
     document.addEventListener('DOMContentLoaded', () => {
       loadComments();
+      loadSettings();
     });
 
     // 댓글 목록 불러오기
@@ -471,6 +919,7 @@ export async function renderDashboard(env: Env): Promise<string> {
         const data = await res.json();
 
         if (data.success) {
+          commentsCache = data.data.comments;
           renderComments(data.data.comments);
           renderPagination(data.data.page, data.data.totalPages, data.data.total);
         }
@@ -495,16 +944,21 @@ export async function renderDashboard(env: Env): Promise<string> {
         return;
       }
 
-      tbody.innerHTML = comments.map(comment => \`
+      tbody.innerHTML = comments.map(comment => {
+        const sanitizedText = sanitizeHtml(comment.text || '');
+        const sanitizedReply = comment.replyText ? sanitizeHtml(comment.replyText) : '';
+        const decodedAuthor = decodeHtmlEntities(comment.authorName || '');
+        return \`
         <tr>
           <td><span class="badge \${comment.status}">\${getStatusLabel(comment.status)}</span></td>
           <td><span class="badge \${comment.type || 'other'}">\${getTypeLabel(comment.type)}</span></td>
-          <td>\${escapeHtml(comment.authorName)}</td>
-          <td class="comment-text" title="\${escapeHtml(comment.text)}">\${escapeHtml(comment.text)}</td>
-          <td class="reply-preview \${comment.replyText ? 'has-reply' : ''}" title="\${comment.replyText ? escapeHtml(comment.replyText) : ''}">\${comment.replyText ? escapeHtml(comment.replyText) : '-'}</td>
-          <td>\${comment.status === 'generated' ? \`<button class="btn-approve-sm" onclick="approveComment('\${comment.id}')">✅ 승인</button>\` : '-'}</td>
+          <td>\${escapeHtml(decodedAuthor)}</td>
+          <td class="comment-text">\${sanitizedText}</td>
+          <td class="reply-preview \${comment.replyText ? 'has-reply' : ''}">\${sanitizedReply || '-'}</td>
+          <td>\${comment.status === 'generated' ? \`<button class="btn-edit-sm" onclick="openEditModal('\${comment.id}')">✏️ 수정</button><button class="btn-approve-sm" onclick="approveComment('\${comment.id}')">✅ 승인</button>\` : '-'}</td>
         </tr>
-      \`).join('');
+      \`;
+      }).join('');
     }
 
     // 페이지네이션 렌더링
@@ -658,6 +1112,7 @@ export async function renderDashboard(env: Env): Promise<string> {
         if (data.success) {
           showToast(data.message, 'success');
           loadComments();
+          setTimeout(() => location.reload(), 1000);
         } else {
           showToast(data.error || '실패했습니다', 'error');
         }
@@ -665,6 +1120,59 @@ export async function renderDashboard(env: Env): Promise<string> {
         showToast('네트워크 오류가 발생했습니다', 'error');
       }
     }
+
+    // 수정 모달 열기
+    function openEditModal(commentId) {
+      const comment = commentsCache.find(c => c.id === commentId);
+      if (!comment) {
+        showToast('댓글을 찾을 수 없습니다', 'error');
+        return;
+      }
+
+      editingCommentId = commentId;
+      document.getElementById('modalOriginalComment').textContent = comment.text;
+      document.getElementById('modalReplyText').value = comment.replyText || '';
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    // 수정 모달 닫기
+    function closeEditModal() {
+      editingCommentId = null;
+      document.getElementById('editModal').classList.remove('show');
+    }
+
+    // 수정된 응답 저장
+    async function saveEditedReply() {
+      if (!editingCommentId) return;
+
+      const replyText = document.getElementById('modalReplyText').value;
+
+      try {
+        const res = await apiCall(\`/api/comments/\${editingCommentId}/reply\`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ replyText })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(data.message, 'success');
+          closeEditModal();
+          loadComments();
+        } else {
+          showToast(data.error || '저장에 실패했습니다', 'error');
+        }
+      } catch (error) {
+        showToast('네트워크 오류가 발생했습니다', 'error');
+      }
+    }
+
+    // 모달 바깥 클릭시 닫기
+    document.getElementById('editModal').addEventListener('click', (e) => {
+      if (e.target.id === 'editModal') {
+        closeEditModal();
+      }
+    });
 
     // 토스트 메시지
     function showToast(message, type) {
@@ -706,6 +1214,173 @@ export async function renderDashboard(env: Env): Promise<string> {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // HTML 엔티티 디코딩 (YouTube API에서 &amp; 등으로 인코딩된 텍스트 처리)
+    function decodeHtmlEntities(text) {
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = text;
+      return textarea.value;
+    }
+
+    // YouTube 댓글 HTML 처리 (안전한 링크만 허용, 나머지는 이스케이프)
+    function sanitizeHtml(text) {
+      if (!text) return '';
+
+      // 먼저 HTML 엔티티 디코딩
+      const decoded = decodeHtmlEntities(text);
+
+      // <a> 태그를 임시 플레이스홀더로 대체
+      const linkPattern = /<a\\s+href="(https?:\\/\\/[^"]+)"[^>]*>([^<]+)<\\/a>/gi;
+      const links = [];
+      let processed = decoded.replace(linkPattern, (match, href, linkText) => {
+        const index = links.length;
+        // YouTube/안전한 링크만 허용
+        const safeHref = escapeHtml(href);
+        const safeLinkText = escapeHtml(linkText);
+        links.push(\`<a href="\${safeHref}" target="_blank" rel="noopener" style="color: #3b82f6;">\${safeLinkText}</a>\`);
+        return \`__LINK_\${index}__\`;
+      });
+
+      // 나머지 텍스트 이스케이프
+      processed = escapeHtml(processed);
+
+      // 플레이스홀더를 다시 링크로 복원
+      links.forEach((link, index) => {
+        processed = processed.replace(\`__LINK_\${index}__\`, link);
+      });
+
+      return processed;
+    }
+
+    // 설정 토글
+    function toggleSettings() {
+      const content = document.getElementById('settingsContent');
+      const toggle = document.getElementById('settingsToggle');
+      const isShown = content.classList.toggle('show');
+      toggle.textContent = isShown ? '▲ 접기' : '▼ 펼치기';
+    }
+
+    // 설정 불러오기
+    async function loadSettings() {
+      try {
+        const res = await apiCall('/api/settings');
+        const data = await res.json();
+
+        if (data.success && data.data) {
+          settingsCache = data.data;
+          // 기본값 적용
+          if (!settingsCache.commonInstructions) {
+            settingsCache.commonInstructions = DEFAULT_COMMON_INSTRUCTIONS;
+          }
+          if (!settingsCache.typeInstructions) {
+            settingsCache.typeInstructions = DEFAULT_TYPE_INSTRUCTIONS;
+          }
+        } else {
+          settingsCache = {
+            commonInstructions: DEFAULT_COMMON_INSTRUCTIONS,
+            typeInstructions: DEFAULT_TYPE_INSTRUCTIONS
+          };
+        }
+
+        renderSettings();
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        settingsCache = {
+          commonInstructions: DEFAULT_COMMON_INSTRUCTIONS,
+          typeInstructions: DEFAULT_TYPE_INSTRUCTIONS
+        };
+        renderSettings();
+      }
+    }
+
+    // 설정 렌더링
+    function renderSettings() {
+      // 공통 지침
+      const commonInput = document.getElementById('commonInstructions');
+      commonInput.value = settingsCache?.commonInstructions || DEFAULT_COMMON_INSTRUCTIONS;
+
+      // 분류별 지침
+      const container = document.getElementById('typeInstructions');
+      const types = ['positive', 'negative', 'question', 'suggestion', 'reaction', 'other'];
+
+      container.innerHTML = types.map(type => {
+        const typeInfo = TYPE_LABELS[type];
+        const instruction = settingsCache?.typeInstructions?.[type] || DEFAULT_TYPE_INSTRUCTIONS[type];
+
+        return \`
+          <div class="type-card">
+            <div class="type-card-header">
+              <div class="type-card-title">
+                <span class="badge \${type}">\${typeInfo.label}</span>
+                <span style="color: #888; font-size: 13px;">\${typeInfo.desc}</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="enabled_\${type}" \${instruction.enabled ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <textarea class="instruction" id="instruction_\${type}" placeholder="이 유형에 대한 추가 지침...">\${escapeHtml(instruction.instruction || '')}</textarea>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    // 설정 저장
+    async function saveSettings() {
+      const loading = document.getElementById('saveSettingsLoading');
+      loading.classList.add('show');
+
+      try {
+        const types = ['positive', 'negative', 'question', 'suggestion', 'reaction', 'other'];
+        const typeInstructions = {};
+
+        types.forEach(type => {
+          typeInstructions[type] = {
+            enabled: document.getElementById(\`enabled_\${type}\`).checked,
+            instruction: document.getElementById(\`instruction_\${type}\`).value
+          };
+        });
+
+        // 기존 설정과 병합
+        const updatedSettings = {
+          ...settingsCache,
+          commonInstructions: document.getElementById('commonInstructions').value,
+          typeInstructions
+        };
+
+        const res = await apiCall('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedSettings)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          settingsCache = updatedSettings;
+          showToast('설정이 저장되었습니다', 'success');
+        } else {
+          showToast(data.error || '저장에 실패했습니다', 'error');
+        }
+      } catch (error) {
+        showToast('네트워크 오류가 발생했습니다', 'error');
+      } finally {
+        loading.classList.remove('show');
+      }
+    }
+
+    // 설정 초기화
+    function resetSettings() {
+      if (!confirm('모든 지침을 기본값으로 초기화하시겠습니까?')) return;
+
+      settingsCache = {
+        ...settingsCache,
+        commonInstructions: DEFAULT_COMMON_INSTRUCTIONS,
+        typeInstructions: DEFAULT_TYPE_INSTRUCTIONS
+      };
+      renderSettings();
+      showToast('기본값으로 초기화되었습니다. 저장 버튼을 눌러 적용하세요.', 'success');
     }
   </script>
 </body>

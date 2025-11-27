@@ -10,9 +10,49 @@ import { saveComment, commentExists, setLastFetchedAt } from '../lib/kv'
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
 
 /**
+ * KV에서 저장된 토큰 가져오기
+ */
+async function getStoredTokens(kv: KVNamespace): Promise<{
+  accessToken?: string
+  refreshToken?: string
+  expiresAt?: number
+} | null> {
+  const data = await kv.get('youtube_tokens', 'json')
+  return data as any
+}
+
+/**
+ * KV에 토큰 저장하기
+ */
+async function saveTokens(kv: KVNamespace, tokens: {
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+}): Promise<void> {
+  await kv.put('youtube_tokens', JSON.stringify(tokens))
+}
+
+/**
  * OAuth Access Token 갱신
  */
 async function refreshAccessToken(env: Env): Promise<string> {
+  // KV에서 저장된 토큰 확인
+  const storedTokens = await getStoredTokens(env.KV)
+
+  // 저장된 access token이 아직 유효하면 그대로 사용
+  if (storedTokens?.accessToken && storedTokens?.expiresAt) {
+    if (Date.now() < storedTokens.expiresAt - 60000) { // 1분 여유
+      return storedTokens.accessToken
+    }
+  }
+
+  // refresh token 결정 (KV 우선, 없으면 env)
+  const refreshToken = storedTokens?.refreshToken || env.YOUTUBE_REFRESH_TOKEN
+
+  if (!refreshToken) {
+    throw new Error('No refresh token available. Please re-authorize the app.')
+  }
+
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: {
@@ -21,17 +61,83 @@ async function refreshAccessToken(env: Env): Promise<string> {
     body: new URLSearchParams({
       client_id: env.YOUTUBE_CLIENT_ID,
       client_secret: env.YOUTUBE_CLIENT_SECRET,
-      refresh_token: env.YOUTUBE_REFRESH_TOKEN,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to refresh token: ${response.statusText}`)
+    const errorText = await response.text()
+    console.error('Token refresh failed:', errorText)
+    throw new Error(`Failed to refresh token: ${response.statusText}. Please re-authorize at /oauth/start`)
   }
 
-  const data = await response.json() as { access_token: string }
+  const data = await response.json() as {
+    access_token: string
+    expires_in: number
+    refresh_token?: string  // 새 refresh token이 발급될 수도 있음
+  }
+
+  // 토큰 저장 (새 refresh token이 있으면 업데이트)
+  await saveTokens(env.KV, {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || refreshToken,
+    expiresAt: Date.now() + (data.expires_in * 1000)
+  })
+
   return data.access_token
+}
+
+/**
+ * Authorization code로 토큰 교환 (OAuth 콜백에서 사용)
+ */
+export async function exchangeCodeForTokens(env: Env, code: string, redirectUri: string): Promise<void> {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: env.YOUTUBE_CLIENT_ID,
+      client_secret: env.YOUTUBE_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to exchange code: ${errorText}`)
+  }
+
+  const data = await response.json() as {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+  }
+
+  // KV에 토큰 저장
+  await saveTokens(env.KV, {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt: Date.now() + (data.expires_in * 1000)
+  })
+}
+
+/**
+ * OAuth 인증 URL 생성
+ */
+export function getOAuthUrl(env: Env, redirectUri: string): string {
+  const params = new URLSearchParams({
+    client_id: env.YOUTUBE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'https://www.googleapis.com/auth/youtube.force-ssl',
+    access_type: 'offline',
+    prompt: 'consent',  // 항상 refresh token 발급
+  })
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`
 }
 
 /**

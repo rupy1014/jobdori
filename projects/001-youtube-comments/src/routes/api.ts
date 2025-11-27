@@ -205,6 +205,42 @@ api.post('/generate', async (c) => {
 })
 
 /**
+ * 생성된 응답 수정
+ * PUT /api/comments/:id/reply
+ */
+api.put('/comments/:id/reply', async (c) => {
+  const commentId = c.req.param('id')
+
+  try {
+    const body = await c.req.json<{ replyText: string }>()
+
+    if (!body.replyText || body.replyText.trim() === '') {
+      return c.json<ApiResponse>({
+        success: false,
+        error: '응답 내용을 입력해주세요.'
+      }, 400)
+    }
+
+    // 응답 텍스트 업데이트
+    await updateComment(c.env.KV, commentId, {
+      replyText: body.replyText.trim(),
+      generatedAt: new Date().toISOString()
+    })
+
+    return c.json<ApiResponse>({
+      success: true,
+      message: '응답이 수정되었습니다.'
+    })
+  } catch (error) {
+    console.error(`Edit reply error for ${commentId}:`, error)
+    return c.json<ApiResponse>({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to edit reply'
+    }, 500)
+  }
+})
+
+/**
  * 개별 댓글 승인 (YouTube에 게시)
  * POST /api/comments/:id/approve
  */

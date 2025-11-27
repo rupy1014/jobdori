@@ -1,7 +1,7 @@
 {
-  "name": "youtube-reply-bot",
+  "name": "autonomey",
   "version": "1.0.0",
-  "description": "YouTube 댓글 자동 응답 대시보드 - Cloudflare Workers",
+  "description": "Autonomey - YouTube 댓글 자동 응답 봇 (Cloudflare Workers)",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {

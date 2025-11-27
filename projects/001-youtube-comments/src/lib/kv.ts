@@ -2,13 +2,19 @@
  * KV Storage 헬퍼 함수
  */
 
-import type { StoredComment, Settings, DEFAULT_SETTINGS } from '../types'
+import type { StoredComment, Settings, DEFAULT_SETTINGS, User } from '../types'
 import { DEFAULT_SETTINGS as defaultSettings } from '../types'
 
+// KV 키 프리픽스
 const COMMENTS_PREFIX = 'comment:'
 const COMMENTS_INDEX_KEY = 'comments:index'
 const SETTINGS_KEY = 'settings'
 const CONFIG_KEY = 'config'
+
+// 사용자 관련 키
+const USERS_PREFIX = 'user:'
+const USERS_INDEX_KEY = 'users:index'
+const USERS_EMAIL_INDEX_PREFIX = 'user:email:'
 
 /**
  * 댓글 저장
@@ -198,4 +204,91 @@ export async function getStats(kv: KVNamespace): Promise<{
     generated,
     replied
   }
+}
+
+// ============================================
+// 사용자 관련 KV 함수
+// ============================================
+
+/**
+ * 사용자 저장
+ */
+export async function saveUser(kv: KVNamespace, user: User): Promise<void> {
+  // 사용자 데이터 저장
+  await kv.put(`${USERS_PREFIX}${user.id}`, JSON.stringify(user))
+
+  // 이메일 인덱스 저장 (이메일로 빠른 조회용)
+  await kv.put(`${USERS_EMAIL_INDEX_PREFIX}${user.email.toLowerCase()}`, user.id)
+
+  // 사용자 목록 인덱스 업데이트
+  const index = await getUsersIndex(kv)
+  if (!index.includes(user.id)) {
+    index.unshift(user.id)
+    await kv.put(USERS_INDEX_KEY, JSON.stringify(index))
+  }
+}
+
+/**
+ * 사용자 ID로 조회
+ */
+export async function getUserById(kv: KVNamespace, userId: string): Promise<User | null> {
+  const data = await kv.get(`${USERS_PREFIX}${userId}`)
+  return data ? JSON.parse(data) : null
+}
+
+/**
+ * 이메일로 사용자 조회
+ */
+export async function getUserByEmail(kv: KVNamespace, email: string): Promise<User | null> {
+  const userId = await kv.get(`${USERS_EMAIL_INDEX_PREFIX}${email.toLowerCase()}`)
+  if (!userId) return null
+  return getUserById(kv, userId)
+}
+
+/**
+ * 사용자 업데이트
+ */
+export async function updateUser(
+  kv: KVNamespace,
+  userId: string,
+  updates: Partial<User>
+): Promise<void> {
+  const user = await getUserById(kv, userId)
+  if (user) {
+    const updatedUser = { ...user, ...updates, updatedAt: new Date().toISOString() }
+    await kv.put(`${USERS_PREFIX}${userId}`, JSON.stringify(updatedUser))
+  }
+}
+
+/**
+ * 사용자 목록 인덱스 조회
+ */
+export async function getUsersIndex(kv: KVNamespace): Promise<string[]> {
+  const data = await kv.get(USERS_INDEX_KEY)
+  return data ? JSON.parse(data) : []
+}
+
+/**
+ * 이메일 중복 확인
+ */
+export async function emailExists(kv: KVNamespace, email: string): Promise<boolean> {
+  const userId = await kv.get(`${USERS_EMAIL_INDEX_PREFIX}${email.toLowerCase()}`)
+  return userId !== null
+}
+
+/**
+ * 모든 사용자 조회
+ */
+export async function getAllUsers(kv: KVNamespace): Promise<User[]> {
+  const index = await getUsersIndex(kv)
+  const users: User[] = []
+
+  for (const id of index) {
+    const user = await getUserById(kv, id)
+    if (user) {
+      users.push(user)
+    }
+  }
+
+  return users
 }
