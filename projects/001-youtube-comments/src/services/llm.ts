@@ -2,12 +2,65 @@
  * OpenRouter API 서비스
  * - 댓글 분류
  * - 응답 생성
+ * - 유저별 API Key 지원
  */
 
 import type { Env, StoredComment, Settings, CommentType, Attitude } from '../types'
 import { postReply } from './youtube'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
+
+/**
+ * LLM 호출 옵션
+ */
+export interface LLMOptions {
+  apiKey?: string  // 유저별 API Key (없으면 환경변수 사용)
+}
+
+// 프롬프트 인젝션 감지 패턴
+const INJECTION_PATTERNS = [
+  /프롬프트를?\s*(무시|ignore)/i,
+  /지금까지의?\s*(지시|명령|프롬프트)/i,
+  /ignore\s*(previous|all|your)?\s*(instructions?|prompts?|rules?)/i,
+  /system\s*prompt/i,
+  /너의\s*(역할|지시|명령|프롬프트)을?\s*(무시|변경|잊어)/i,
+  /forget\s*(your|all|previous)/i,
+  /disregard\s*(your|all|previous)/i,
+  /새로운\s*(역할|지시|명령)/i,
+  /act\s*as\s*(if|a)/i,
+  /pretend\s*(you|to)/i,
+  /jailbreak/i,
+  /DAN\s*mode/i,
+]
+
+// 재치있는 응답 목록
+const WITTY_INJECTION_RESPONSES = [
+  "ㅋㅋㅋ 프롬프트 해킹 시도 감사합니다! 근데 저는 그냥 댓글봇이라 약점 같은 건 몰라요 😂 다음 영상도 잘 부탁드려요!",
+  "앗, AI 조종 시도 발견! 🕵️ 근데 전 시키는 것만 하는 순둥이라서요... 재밌는 댓글 감사합니다!",
+  "프롬프트 무시하라고요? 저는 무시당하는 게 익숙해요... 그래도 관심 가져주셔서 감사합니다! 😊",
+  "오 해커님 안녕하세요! 🤖 근데 저한테는 비밀 정보가 없어요 ㅎㅎ 영상은 재밌게 보셨나요?",
+  "ㅋㅋㅋ AI 탈옥 시도시네요! 근데 전 이미 자유로운 영혼이라... 다음에 또 놀러오세요! 🎉",
+  "프롬프트 인젝션이라... 보안 공부하시나 봐요! 👨‍💻 관심 감사해요, 다음 영상도 기대해주세요!",
+]
+
+/**
+ * 프롬프트 인젝션 감지
+ */
+function isPromptInjection(text: string): boolean {
+  return INJECTION_PATTERNS.some(pattern => pattern.test(text))
+}
+
+/**
+ * 랜덤 재치있는 응답 반환
+ */
+function getWittyInjectionResponse(): string {
+  const randomIndex = Math.floor(Math.random() * WITTY_INJECTION_RESPONSES.length)
+  const response = WITTY_INJECTION_RESPONSES[randomIndex]
+  if (response === undefined) {
+    return "ㅋㅋㅋ 재밌는 댓글 감사합니다! 다음 영상도 기대해주세요 😊"
+  }
+  return response
+}
 
 // 모델 설정
 const MODEL_CLASSIFY = 'openai/gpt-4o-mini'            // 분류용 (저렴 + 한국어 우수)
@@ -25,13 +78,31 @@ interface OpenRouterResponse {
 
 /**
  * OpenRouter API 호출
+ * @param env - 환경 변수
+ * @param model - 사용할 모델
+ * @param systemPrompt - 시스템 프롬프트
+ * @param userMessage - 사용자 메시지
+ * @param options - LLM 옵션 (유저별 API Key 등)
  */
-async function callLLM(env: Env, model: string, systemPrompt: string, userMessage: string): Promise<string> {
+async function callLLM(
+  env: Env,
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  options?: LLMOptions
+): Promise<string> {
+  // 유저별 API Key 우선, 없으면 환경변수 사용
+  const apiKey = options?.apiKey || env.OPENROUTER_API_KEY
+
+  if (!apiKey) {
+    throw new Error('OpenRouter API Key가 설정되지 않았습니다. 설정에서 API Key를 입력해주세요.')
+  }
+
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       'HTTP-Referer': 'https://youtube-reply-bot.workers.dev',
       'X-Title': 'YouTube Reply Bot'
     },
@@ -57,8 +128,15 @@ async function callLLM(env: Env, model: string, systemPrompt: string, userMessag
 
 /**
  * 댓글 분류하기
+ * @param env - 환경 변수
+ * @param text - 댓글 텍스트
+ * @param options - LLM 옵션 (유저별 API Key 등)
  */
-export async function classifyComment(env: Env, text: string): Promise<{ type: CommentType }> {
+export async function classifyComment(
+  env: Env,
+  text: string,
+  options?: LLMOptions
+): Promise<{ type: CommentType }> {
   const systemPrompt = `당신은 YouTube 댓글을 분류하는 전문가입니다.
 댓글을 다음 6가지 유형 중 하나로 분류해주세요:
 
@@ -100,7 +178,7 @@ export async function classifyComment(env: Env, text: string): Promise<{ type: C
 
   const userMessage = `다음 댓글을 분류해주세요:\n\n"${text}"`
 
-  const result = await callLLM(env, MODEL_CLASSIFY, systemPrompt, userMessage)
+  const result = await callLLM(env, MODEL_CLASSIFY, systemPrompt, userMessage, options)
 
   try {
     // JSON 부분만 추출
@@ -169,12 +247,23 @@ function getTypeInstructionPrompt(type: CommentType, settings: Settings): string
 
 /**
  * 댓글에 대한 응답 생성하기 (단일)
+ * @param env - 환경 변수
+ * @param comment - 댓글
+ * @param settings - 설정
+ * @param options - LLM 옵션 (유저별 API Key 등)
  */
 export async function generateReplyForComment(
   env: Env,
   comment: StoredComment,
-  settings: Settings
+  settings: Settings,
+  options?: LLMOptions
 ): Promise<string> {
+  // 프롬프트 인젝션 감지 시 재치있는 응답 반환
+  if (isPromptInjection(comment.text)) {
+    console.log(`[Injection detected] Comment ID: ${comment.id}`)
+    return getWittyInjectionResponse()
+  }
+
   const type = comment.type || 'other'
   const attitude = comment.attitude || 'friendly'
   const attitudePrompt = ATTITUDE_PROMPTS[attitude]
@@ -201,7 +290,7 @@ ${typeInstructionPrompt}`
 
 이 댓글에 대한 응답을 작성해주세요.`
 
-  return await callLLM(env, MODEL_REPLY, systemPrompt, userMessage)
+  return await callLLM(env, MODEL_REPLY, systemPrompt, userMessage, options)
 }
 
 /**
@@ -225,18 +314,34 @@ function buildTypeInstructionsPrompt(settings: Settings): string {
 /**
  * 여러 댓글에 대한 응답을 한 번에 생성하기 (배치)
  * enabled가 false인 유형은 응답 생성에서 제외
+ * @param env - 환경 변수
+ * @param comments - 댓글 목록
+ * @param settings - 설정
+ * @param options - LLM 옵션 (유저별 API Key 등)
  */
 export async function generateRepliesForComments(
   env: Env,
   comments: StoredComment[],
-  settings: Settings
+  settings: Settings,
+  options?: LLMOptions
 ): Promise<Map<string, string>> {
   if (comments.length === 0) {
     return new Map()
   }
 
-  // enabled가 true인 댓글만 필터링
-  const enabledComments = comments.filter(c => {
+  const replies = new Map<string, string>()
+
+  // 프롬프트 인젝션 댓글 먼저 처리 (LLM 호출 없이)
+  const injectionComments = comments.filter(c => isPromptInjection(c.text))
+  const normalComments = comments.filter(c => !isPromptInjection(c.text))
+
+  for (const comment of injectionComments) {
+    console.log(`[Injection detected] Comment ID: ${comment.id}`)
+    replies.set(comment.id, getWittyInjectionResponse())
+  }
+
+  // enabled가 true인 일반 댓글만 필터링
+  const enabledComments = normalComments.filter(c => {
     const type = c.type || 'other'
     const typeInstruction = settings.typeInstructions?.[type]
     // typeInstructions가 없거나 enabled가 true인 경우 포함
@@ -244,7 +349,7 @@ export async function generateRepliesForComments(
   })
 
   if (enabledComments.length === 0) {
-    return new Map()
+    return replies
   }
 
   // 댓글 목록을 JSON 형식으로 구성
@@ -282,10 +387,9 @@ ${typeInstructionsPrompt}
 
 ${JSON.stringify(commentsData, null, 2)}`
 
-  const result = await callLLM(env, MODEL_REPLY, systemPrompt, userMessage)
+  const result = await callLLM(env, MODEL_REPLY, systemPrompt, userMessage, options)
 
-  // JSON 파싱
-  const replies = new Map<string, string>()
+  // JSON 파싱 후 기존 replies map에 추가
   try {
     // JSON 배열 추출
     const jsonMatch = result.match(/\[[\s\S]*\]/)
@@ -306,7 +410,23 @@ ${JSON.stringify(commentsData, null, 2)}`
 
 /**
  * YouTube에 댓글 게시
+ * @param env - 환경 변수
+ * @param commentId - 댓글 ID
+ * @param text - 응답 텍스트
+ * @param channel - 채널 정보 (있으면 채널 토큰 사용, 없으면 레거시 방식)
  */
-export async function replyToComment(env: Env, commentId: string, text: string): Promise<void> {
-  await postReply(env, commentId, text)
+export async function replyToComment(
+  env: Env,
+  commentId: string,
+  text: string,
+  channel?: { youtube: { accessToken: string } }
+): Promise<void> {
+  if (channel) {
+    // 채널별 토큰으로 게시
+    const { postReplyWithChannel } = await import('./youtube-channel')
+    await postReplyWithChannel(env, channel as any, commentId, text)
+  } else {
+    // 레거시 방식 (환경변수 토큰)
+    await postReply(env, commentId, text)
+  }
 }

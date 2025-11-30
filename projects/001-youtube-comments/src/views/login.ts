@@ -22,8 +22,44 @@ export function renderLogin(): string {
       color: #fff;
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 20px;
+    }
+
+    footer {
+      width: 100%;
+      padding: 20px;
+      text-align: center;
+      border-top: 1px solid #222;
+    }
+
+    .footer-copy {
+      color: #555;
+      font-size: 12px;
+    }
+
+    .footer-copy a {
+      color: #555;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-copy a:hover {
+      color: #888;
+    }
+
+    .footer-copy a span {
+      color: #ef4444;
     }
 
     .auth-container {
@@ -170,23 +206,6 @@ export function renderLogin(): string {
       font-size: 13px;
     }
 
-    .basic-auth-btn {
-      width: 100%;
-      padding: 14px;
-      border: 1px solid #333;
-      border-radius: 8px;
-      background: transparent;
-      color: #888;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .basic-auth-btn:hover {
-      border-color: #555;
-      color: #fff;
-    }
-
     #signup-form {
       display: none;
     }
@@ -209,6 +228,7 @@ export function renderLogin(): string {
   </style>
 </head>
 <body>
+  <div class="main-content">
   <div class="auth-container">
     <h1>Autonomey</h1>
     <p class="subtitle">YouTube 댓글 자동 응답 봇</p>
@@ -256,16 +276,15 @@ export function renderLogin(): string {
       <button type="submit" id="signup-btn">회원가입</button>
     </form>
 
-    <div class="divider">
-      <div class="divider-line"></div>
-      <span class="divider-text">또는</span>
-      <div class="divider-line"></div>
-    </div>
-
-    <button class="basic-auth-btn" onclick="useBasicAuth()">
-      관리자 계정으로 로그인 (Basic Auth)
-    </button>
   </div>
+  </div>
+
+  <footer>
+    <div class="footer-copy">
+      © 2025 Autonomey. All rights reserved.<br>
+      <a href="https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4" target="_blank" rel="noopener">Made with ❤️ by <span>AI잡돌이</span></a>
+    </div>
+  </footer>
 
   <script>
     function showTab(tab) {
@@ -344,9 +363,9 @@ export function renderLogin(): string {
           // 쿠키에도 저장 (대시보드 접근용)
           document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60);
 
-          showSuccess('로그인 성공! 대시보드로 이동합니다...');
+          showSuccess('로그인 성공! 채널 목록으로 이동합니다...');
           setTimeout(() => {
-            window.location.href = '/';
+            window.location.href = '/channels';
           }, 1000);
         } else {
           showError(data.error || '로그인에 실패했습니다.');
@@ -385,9 +404,9 @@ export function renderLogin(): string {
           // 쿠키에도 저장
           document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60);
 
-          showSuccess('회원가입 성공! 대시보드로 이동합니다...');
+          showSuccess('회원가입 성공! 채널 목록으로 이동합니다...');
           setTimeout(() => {
-            window.location.href = '/';
+            window.location.href = '/channels';
           }, 1000);
         } else {
           showError(data.error || '회원가입에 실패했습니다.');
@@ -399,29 +418,41 @@ export function renderLogin(): string {
       }
     }
 
-    function useBasicAuth() {
-      // 브라우저가 Basic Auth 프롬프트를 표시하도록 함
-      window.location.href = '/';
+    // 토큰 삭제 함수
+    function clearTokens() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      document.cookie = 'token=; path=/; max-age=0';
     }
 
     // 페이지 로드 시 기존 토큰 확인
     window.onload = function() {
+      // URL에서 ?logout 파라미터 확인 (무한 루프 방지)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('logout')) {
+        // 로그아웃 요청 - 토큰 삭제하고 URL 정리
+        clearTokens();
+        window.history.replaceState({}, '', '/login');
+        return;
+      }
+
       const token = localStorage.getItem('token');
       if (token) {
         // 토큰이 있으면 유효한지 확인
         fetch('/auth/me', {
           headers: { 'Authorization': 'Bearer ' + token }
-        }).then(res => {
-          if (res.ok) {
-            // 유효한 토큰 - 대시보드로 리다이렉트
-            window.location.href = '/';
+        }).then(res => res.json()).then(data => {
+          if (data.success && data.user) {
+            // 유효한 토큰 - 채널 목록으로 리다이렉트
+            window.location.href = '/channels';
           } else {
-            // 만료된 토큰 - 삭제
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            document.cookie = 'token=; path=/; max-age=0';
+            // 유효하지 않은 토큰 - 삭제
+            clearTokens();
           }
-        }).catch(() => {});
+        }).catch(() => {
+          // 네트워크 오류 시에도 토큰 삭제
+          clearTokens();
+        });
       }
     };
   </script>

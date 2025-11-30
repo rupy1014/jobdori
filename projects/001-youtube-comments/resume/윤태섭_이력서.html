@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>윤태섭 - 서비스 기획자 이력서</title>
+    <link href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #3b82f6;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --bg: #f9fafb;
+            --white: #ffffff;
+            --border: #e5e7eb;
+            --accent: #10b981;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
+            padding: 60px 40px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 400px;
+            height: 400px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 24px;
+        }
+
+        .header-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .header-info-item svg {
+            width: 18px;
+            height: 18px;
+            opacity: 0.9;
+        }
+
+        /* Section */
+        .section {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        /* About */
+        .about-text {
+            font-size: 1.05rem;
+            color: var(--text);
+            line-height: 1.8;
+        }
+
+        .about-text strong {
+            color: var(--primary);
+        }
+
+        /* Skills */
+        .skills-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .skill-category {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .skill-category h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        .skill-item {
+            margin-bottom: 12px;
+        }
+
+        .skill-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .skill-item span {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .skill-list {
+            list-style: none;
+        }
+
+        .skill-list li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 0.95rem;
+        }
+
+        .skill-list li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 6px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+
+        /* Experience */
+        .experience-item {
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .experience-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .experience-item:first-child {
+            padding-top: 0;
+        }
+
+        .experience-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .experience-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .experience-period {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            background: var(--bg);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        .experience-list {
+            list-style: none;
+            margin-top: 12px;
+        }
+
+        .experience-list li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 0.95rem;
+            color: var(--text-light);
+        }
+
+        .experience-list li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .experience-list li a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .experience-list li a:hover {
+            text-decoration: underline;
+        }
+
+        /* Portfolio */
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .portfolio-item {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .portfolio-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .portfolio-item h4 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .portfolio-item p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 12px;
+        }
+
+        .portfolio-item a {
+            color: var(--primary);
+            font-size: 0.9rem;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .portfolio-item a:hover {
+            text-decoration: underline;
+        }
+
+        /* Education */
+        .education-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .education-item:last-child {
+            border-bottom: none;
+        }
+
+        .education-info h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .education-info p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        .education-year {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            background: var(--bg);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        /* Fit Section */
+        .fit-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .fit-item {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .fit-item .icon {
+            width: 48px;
+            height: 48px;
+            background: var(--primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+        }
+
+        .fit-item .icon svg {
+            width: 24px;
+            height: 24px;
+            color: var(--white);
+        }
+
+        .fit-item h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .fit-item p {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        /* Conditions */
+        .conditions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .condition-item {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .condition-item .label {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+
+        .condition-item .value {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .footer-quote {
+            font-size: 1.1rem;
+            color: var(--text);
+            font-style: italic;
+            margin-bottom: 24px;
+            line-height: 1.8;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .footer-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 12px 24px;
+            background: var(--bg);
+            border-radius: 30px;
+            transition: background 0.2s;
+        }
+
+        .footer-link:hover {
+            background: var(--border);
+        }
+
+        .footer-link svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Tags */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .tag {
+            background: var(--bg);
+            color: var(--text-light);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .container {
+                padding: 20px 16px;
+            }
+
+            .header {
+                padding: 40px 24px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .section {
+                padding: 24px;
+            }
+
+            .experience-header {
+                flex-direction: column;
+            }
+        }
+
+        /* Print */
+        @media print {
+            body {
+                background: white;
+            }
+
+            .container {
+                max-width: 100%;
+                padding: 0;
+            }
+
+            .section {
+                box-shadow: none;
+                border: 1px solid var(--border);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>윤태섭</h1>
+            <p class="subtitle">서비스 기획자 (프리랜서) | 풀스택 개발자 | AI & 자동화 전문가</p>
+            <div class="header-info">
+                <div class="header-info-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <span>010-4033-4678</span>
+                </div>
+                <div class="header-info-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span>oojooteam@gmail.com</span>
+                </div>
+                <div class="header-info-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>구로디지털단지/광명 (리모트 가능)</span>
+                </div>
+                <div class="header-info-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span>15년+ 경력</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- About -->
+        <section class="section">
+            <h2 class="section-title">자기소개</h2>
+            <p class="about-text">
+                15년간 <strong>풀스택 개발자이자 창업가</strong>로 활동하며, SaaS 비즈니스 모델링부터 서비스 기획, 개발, 출시까지 전 과정을 경험했습니다.<br><br>
+                특히 <strong>B2B SaaS 서비스</strong>를 직접 Co-Founder로서 기획하고 운영한 경험이 있어, 고객사의 요구사항을 기술적 관점과 비즈니스 관점 모두에서 이해하고 설계할 수 있습니다.<br><br>
+                <strong>린스타트업 방법론</strong>에 깊은 관심을 가지고 있으며, MVP 설계 및 빠른 검증 사이클에 익숙합니다.
+            </p>
+        </section>
+
+        <!-- Core Competencies -->
+        <section class="section">
+            <h2 class="section-title">핵심 역량</h2>
+            <div class="skills-grid">
+                <div class="skill-category">
+                    <h4>서비스 기획 역량</h4>
+                    <ul class="skill-list">
+                        <li>B2B SaaS 서비스 기획 및 운영 (Co-Founder)</li>
+                        <li>비즈니스 모델링, 요구사항 분석</li>
+                        <li>기능 정의서 작성, 화면 기획</li>
+                        <li>특허 및 상표권 출원/등록 다수</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h4>도메인 전문성</h4>
+                    <ul class="skill-list">
+                        <li>E-Commerce & Online Payment</li>
+                        <li>배송, 콘텐츠, 예약 시스템</li>
+                        <li>멤버십, 종량제, 구독 결제</li>
+                        <li>분할결제 등 다양한 결제 모델</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h4>기술적 이해도</h4>
+                    <ul class="skill-list">
+                        <li>기술적 실현 가능성을 고려한 기획</li>
+                        <li>프론트엔드/백엔드 전반 이해</li>
+                        <li>외부 시스템 연동(API) 설계</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h4>AI & 자동화 전문성</h4>
+                    <ul class="skill-list">
+                        <li>AI 활용 업무 자동화 설계</li>
+                        <li>바이브 기획 (Vibe Planning)</li>
+                        <li>바이브 코딩 (Vibe Coding)</li>
+                        <li>YouTube 채널 운영 (AI잡돌이)</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Experience -->
+        <section class="section">
+            <h2 class="section-title">경력 사항</h2>
+
+            <div class="experience-item">
+                <div class="experience-header">
+                    <h3 class="experience-title">B2B SaaS 서비스 | Co-Founder</h3>
+                    <span class="experience-period">2019.09 ~ 현재</span>
+                </div>
+                <ul class="experience-list">
+                    <li>이커머스 SaaS 서비스 비즈니스 모델링 및 기획</li>
+                    <li>코어 모듈 설계 및 개발, 배포</li>
+                    <li>특허 및 상표권 다수 출원/등록</li>
+                    <li>다양한 결제 모델(구독, 종량제, 멤버십 등) 서비스 설계</li>
+                </ul>
+            </div>
+
+            <div class="experience-item">
+                <div class="experience-header">
+                    <h3 class="experience-title">앱 서비스 기획 & 개발</h3>
+                    <span class="experience-period">다수 프로젝트</span>
+                </div>
+                <ul class="experience-list">
+                    <li><a href="https://knottedstore.com/" target="_blank">노티드</a> - 유명 도넛 브랜드 주문 앱</li>
+                    <li><a href="https://apps.apple.com/kr/app/%EB%9F%AC%EB%B4%87-lovot-ai-girlfriend/id6477467647" target="_blank">러봇 (Lovot)</a> - AI 채팅 서비스 앱</li>
+                    <li><a href="https://tymatch.com" target="_blank">티매치 (TyMatch)</a> - 테니스 레슨 관리 & 코트 예약 중개 플랫폼</li>
+                    <li>외주 협력사 파트타임 및 고문 역할 수행</li>
+                    <li><strong>10개 이상의 앱</strong> 기획, 제작 및 출시 경험</li>
+                </ul>
+            </div>
+
+            <div class="experience-item">
+                <div class="experience-header">
+                    <h3 class="experience-title">오픈소스 모듈 배포</h3>
+                    <span class="experience-period">다양한 플랫폼</span>
+                </div>
+                <div class="tags">
+                    <span class="tag">cocoapods</span>
+                    <span class="tag">maven central</span>
+                    <span class="tag">pub.dev</span>
+                    <span class="tag">npm</span>
+                    <span class="tag">pypi</span>
+                    <span class="tag">nuget</span>
+                    <span class="tag">packagist</span>
+                    <span class="tag">Unity Asset Store</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Portfolio -->
+        <section class="section">
+            <h2 class="section-title">주요 포트폴리오</h2>
+            <div class="portfolio-grid">
+                <div class="portfolio-item">
+                    <h4>노티드 (Knotted)</h4>
+                    <p>유명 도넛 브랜드의 모바일 주문 앱 기획 및 개발</p>
+                    <a href="https://knottedstore.com/" target="_blank">knottedstore.com →</a>
+                </div>
+                <div class="portfolio-item">
+                    <h4>러봇 (Lovot)</h4>
+                    <p>AI 기반 채팅 서비스 앱 기획 및 개발</p>
+                    <a href="https://apps.apple.com/kr/app/%EB%9F%AC%EB%B4%87-lovot-ai-girlfriend/id6477467647" target="_blank">App Store →</a>
+                </div>
+                <div class="portfolio-item">
+                    <h4>티매치 (TyMatch)</h4>
+                    <p>테니스 레슨 관리 및 코트 예약 중개 플랫폼</p>
+                    <a href="https://tymatch.com" target="_blank">tymatch.com →</a>
+                </div>
+                <div class="portfolio-item">
+                    <h4>AI잡돌이 YouTube</h4>
+                    <p>AI 자동화, 바이브 기획/코딩 콘텐츠 연재</p>
+                    <a href="https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4" target="_blank">YouTube 채널 →</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Education -->
+        <section class="section">
+            <h2 class="section-title">학력</h2>
+            <div class="education-item">
+                <div class="education-info">
+                    <h4>숭실대학교 미디어학과</h4>
+                    <p>석사 수료</p>
+                </div>
+                <span class="education-year">2014</span>
+            </div>
+            <div class="education-item">
+                <div class="education-info">
+                    <h4>숭실대학교 미디어학부</h4>
+                    <p>학사 졸업</p>
+                </div>
+                <span class="education-year">2011</span>
+            </div>
+        </section>
+
+        <!-- Why Fit -->
+        <section class="section">
+            <h2 class="section-title">인사관리 SaaS 프로젝트 적합성</h2>
+            <div class="fit-grid">
+                <div class="fit-item">
+                    <div class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                    </div>
+                    <h4>SaaS 기획 경험</h4>
+                    <p>B2B SaaS 직접 창업/운영으로 SaaS 특유의 기획 포인트 이해</p>
+                </div>
+                <div class="fit-item">
+                    <div class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                    </div>
+                    <h4>리모트 적합</h4>
+                    <p>다년간 원격 협업 경험, 자기주도적 업무 수행</p>
+                </div>
+                <div class="fit-item">
+                    <div class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    </div>
+                    <h4>빠른 소통</h4>
+                    <p>개발 배경으로 기술팀과 원활한 커뮤니케이션</p>
+                </div>
+                <div class="fit-item">
+                    <div class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                    </div>
+                    <h4>중소기업 이해</h4>
+                    <p>제한된 리소스 내 효율적인 기획 경험</p>
+                </div>
+                <div class="fit-item">
+                    <div class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <h4>AI & 자동화</h4>
+                    <p>AI 활용 업무 효율화, 바이브 기획/코딩 전문</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Conditions -->
+        <section class="section">
+            <h2 class="section-title">희망 조건</h2>
+            <div class="conditions-grid">
+                <div class="condition-item">
+                    <p class="label">근무 형태</p>
+                    <p class="value">리모트 (원격)</p>
+                </div>
+                <div class="condition-item">
+                    <p class="label">투입 시간</p>
+                    <p class="value">주 20시간</p>
+                </div>
+                <div class="condition-item">
+                    <p class="label">정산 방식</p>
+                    <p class="value">협의 가능</p>
+                </div>
+                <div class="condition-item">
+                    <p class="label">시작 가능일</p>
+                    <p class="value">즉시 (ASAP)</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="footer-quote">
+                "인사관리 SaaS 프로젝트에서 노무 전문가분과 함께<br>
+                의미 있는 서비스를 만들어가고 싶습니다."
+            </p>
+            <div class="footer-links">
+                <a href="mailto:oojooteam@gmail.com" class="footer-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    이메일 문의
+                </a>
+                <a href="https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4" target="_blank" class="footer-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    YouTube
+                </a>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

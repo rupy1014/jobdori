@@ -1,51 +1,32 @@
 # Autonomey - YouTube 댓글 자동 응답 봇
-# Cloudflare Workers 설정
+# Cloudflare Pages 설정
 name = "autonomey"
-main = "src/index.ts"
+pages_build_output_dir = "./public"
 compatibility_date = "2025-03-05"
 compatibility_flags = ["nodejs_compat_v2"]
 
-# 매일 자동 실행 (09:00 KST = 00:00 UTC)
-[triggers]
-crons = ["0 0 * * *"]
-
-# 개발 환경 변수
-[vars]
-ENVIRONMENT = "development"
-
 # KV 네임스페이스 (댓글 + 사용자 데이터 저장용)
-# wrangler kv:namespace create KV 실행 후 id 입력
 [[kv_namespaces]]
 binding = "KV"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+id = "64dd5ce7c4d342899867fb1f113f102c"
 
-# 개발 환경
-[env.development]
-name = "autonomey-dev"
-vars = { ENVIRONMENT = "development" }
+# 환경 변수
+[vars]
+ENVIRONMENT = "production"
 
-[[env.development.kv_namespaces]]
-binding = "KV"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+# Cron 트리거 (Pages에서는 지원 안됨 - 별도 Worker 필요)
+# - 매 15분: 댓글 수집 + 분류 + 응답 생성
+# - 매 30분: 자동 승인 시간 체크 후 게시
+# [triggers]
+# crons = ["*/15 * * * *", "*/30 * * * *"]
 
-# 프로덕션 환경
-[env.production]
-name = "autonomey"
-vars = { ENVIRONMENT = "production" }
-
-[[env.production.kv_namespaces]]
-binding = "KV"
-id = "your-production-kv-namespace-id"
-
-# Secrets (wrangler secret put 으로 설정)
+# Secrets (Cloudflare Dashboard에서 설정)
 # JWT_SECRET - JWT 토큰 서명용 시크릿
 # ADMIN_PASSWORD - Basic Auth 비밀번호 (레거시)
 # YOUTUBE_API_KEY - YouTube Data API 키
-# YOUTUBE_CHANNEL_ID - 내 채널 ID
-# YOUTUBE_ACCESS_TOKEN - OAuth access token
-# YOUTUBE_REFRESH_TOKEN - OAuth refresh token
+# YOUTUBE_CHANNEL_ID - 내 채널 ID (레거시, 단일 채널용)
+# YOUTUBE_ACCESS_TOKEN - OAuth access token (레거시)
+# YOUTUBE_REFRESH_TOKEN - OAuth refresh token (레거시)
 # YOUTUBE_CLIENT_ID - OAuth client id
 # YOUTUBE_CLIENT_SECRET - OAuth client secret
 # OPENROUTER_API_KEY - OpenRouter API 키

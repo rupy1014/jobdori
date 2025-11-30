@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바이브 기획 - AI 시대의 기획자</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      line-height: 1.8;
+      scroll-behavior: smooth;
+    }
+
+    .slide {
+      min-height: 100vh;
+      padding: 80px 10%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-bottom: 1px solid #222;
+      position: relative;
+    }
+
+    .slide-title {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0a 100%);
+    }
+
+    h1 {
+      font-size: 4rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h2 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      color: #fff;
+    }
+
+    h3 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      color: #667eea;
+    }
+
+    p {
+      font-size: 1.4rem;
+      margin-bottom: 1rem;
+      color: #b0b0b0;
+    }
+
+    .subtitle {
+      font-size: 1.5rem;
+      color: #888;
+      margin-bottom: 2rem;
+    }
+
+    .highlight {
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .big-quote {
+      font-size: 2rem;
+      font-style: italic;
+      color: #888;
+      border-left: 4px solid #667eea;
+      padding-left: 2rem;
+      margin: 2rem 0;
+    }
+
+    .card {
+      background: #151515;
+      border-radius: 16px;
+      padding: 2rem;
+      margin: 1rem 0;
+      border: 1px solid #333;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    .list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .list li {
+      font-size: 1.3rem;
+      padding: 0.8rem 0;
+      padding-left: 2rem;
+      position: relative;
+      color: #c0c0c0;
+    }
+
+    .list li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: #667eea;
+    }
+
+    .code-block {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 1.1rem;
+      overflow-x: auto;
+      border: 1px solid #333;
+    }
+
+    .code-block code {
+      color: #e0e0e0;
+    }
+
+    .code-block .command {
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .code-block .comment {
+      color: #666;
+    }
+
+    .code-block .result {
+      color: #4ade80;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2rem 0;
+      font-size: 1.1rem;
+    }
+
+    th, td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid #333;
+    }
+
+    th {
+      background: #1a1a1a;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    td {
+      color: #b0b0b0;
+    }
+
+    .emphasis {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 700;
+    }
+
+    .section-number {
+      font-size: 5rem;
+      font-weight: 900;
+      color: #222;
+      position: absolute;
+      top: 40px;
+      right: 10%;
+    }
+
+    .flow-diagram {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin: 2rem 0;
+      font-size: 1.1rem;
+    }
+
+    .flow-item {
+      background: #1a1a1a;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid #333;
+    }
+
+    .flow-arrow {
+      color: #667eea;
+    }
+
+    .tree {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #888;
+    }
+
+    .tree .folder {
+      color: #667eea;
+    }
+
+    .tree .file {
+      color: #4ade80;
+    }
+
+    .cta-box {
+      background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+      border: 2px solid #667eea;
+      border-radius: 16px;
+      padding: 2rem;
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    .cta-box a {
+      color: #667eea;
+      font-size: 1.3rem;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .cta-box a:hover {
+      text-decoration: underline;
+    }
+
+    .steps {
+      counter-reset: step;
+    }
+
+    .step {
+      position: relative;
+      padding-left: 4rem;
+      margin-bottom: 2rem;
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      width: 2.5rem;
+      height: 2.5rem;
+      background: #667eea;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .tag {
+      display: inline-block;
+      background: #667eea30;
+      color: #667eea;
+      padding: 0.3rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      margin-right: 0.5rem;
+    }
+
+    .nav {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #151515;
+      padding: 1rem;
+      border-radius: 12px;
+      border: 1px solid #333;
+      z-index: 100;
+      font-size: 0.9rem;
+    }
+
+    .nav a {
+      display: block;
+      color: #888;
+      text-decoration: none;
+      padding: 0.3rem 0;
+    }
+
+    .nav a:hover {
+      color: #667eea;
+    }
+
+    @media (max-width: 768px) {
+      .slide {
+        padding: 40px 5%;
+      }
+      h1 { font-size: 2.5rem; }
+      h2 { font-size: 1.8rem; }
+      h3 { font-size: 1.4rem; }
+      p, .list li { font-size: 1.1rem; }
+      .nav { display: none; }
+      .section-number { font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 네비게이션 -->
+  <nav class="nav">
+    <a href="#title">시작</a>
+    <a href="#intro">서론</a>
+    <a href="#part1">Part 1</a>
+    <a href="#part2">Part 2</a>
+    <a href="#part3">Part 3</a>
+    <a href="#conclusion">결론</a>
+  </nav>
+
+  <!-- 타이틀 슬라이드 -->
+  <section class="slide slide-title" id="title">
+    <h1>바이브 기획</h1>
+    <p class="subtitle">AI 시대, 기획자의 새로운 무기</p>
+    <p style="margin-top: 3rem; color: #666;">2024.12.06</p>
+  </section>
+
+  <!-- 서론: 기획의 생명은 속도 -->
+  <section class="slide" id="intro">
+    <span class="section-number">01</span>
+    <h2>기획의 생명은 속도</h2>
+    <p>바이브 코딩 시대입니다.</p>
+    <p><span class="highlight">바이브 기획</span>, <span class="highlight">바이브 MVP</span>가 요구되고 있어요.</p>
+    <p style="margin-top: 2rem;">실제로 실리콘밸리에서는 <strong>"바이브 PM"</strong> 직무가 등장하고 있습니다.</p>
+
+    <div class="card" style="margin-top: 3rem;">
+      <h3>오늘 주제</h3>
+      <p>새로운 서비스를 만드는 상황을 전제로,<br>
+      <span class="emphasis">"바이브 기획"</span>이란 무엇인지 함께 알아보겠습니다.</p>
+    </div>
+  </section>
+
+  <!-- 서론: 기획자의 현실 -->
+  <section class="slide">
+    <h2>기획자의 현실</h2>
+    <p>주변 기획자들에게 물어보면:</p>
+
+    <ul class="list" style="margin: 2rem 0;">
+      <li>자료조사는 <strong>Perplexity</strong></li>
+      <li>주로 <strong>GPT</strong> 사용</li>
+      <li>UX 설계는 <strong>Figma Make</strong>, <strong>Gemini</strong></li>
+    </ul>
+
+    <div class="card" style="background: #1a1a1a;">
+      <h3 style="color: #ff6b6b;">문제는?</h3>
+      <p style="font-size: 1.6rem; color: #fff;">기획자를 위한 특출난 AI 서비스가 없습니다.</p>
+    </div>
+  </section>
+
+  <!-- 서론: 왜? -->
+  <section class="slide">
+    <h2>왜일까요?</h2>
+    <p class="big-quote">기획은 점진적으로 구체화되는 작업이기 때문입니다.</p>
+
+    <h3 style="margin-top: 3rem;">자료조사 하나만 해도:</h3>
+    <div class="card-grid">
+      <div class="card"><p style="text-align: center; margin: 0;">경쟁사 분석</p></div>
+      <div class="card"><p style="text-align: center; margin: 0;">SWOT 분석</p></div>
+      <div class="card"><p style="text-align: center; margin: 0;">포지셔닝 설정</p></div>
+      <div class="card"><p style="text-align: center; margin: 0;">시장 규모 파악</p></div>
+      <div class="card"><p style="text-align: center; margin: 0;">타겟 고객 리서치</p></div>
+      <div class="card"><p style="text-align: center; margin: 0;">벤치마킹</p></div>
+    </div>
+
+    <p style="margin-top: 2rem; color: #888;">
+      이 각각이 또 세부 태스크로 쪼개지고,<br>
+      결과가 서로 영향을 주고,<br>
+      피드백 받으면 다시 돌아가서 수정하고...
+    </p>
+
+    <p style="margin-top: 2rem; font-size: 1.5rem; color: #ff6b6b;">
+      그래서 <strong>"버튼 하나로 기획 완료!"</strong> 같은 서비스가 나오기 어렵습니다.
+    </p>
+  </section>
+
+  <!-- 서론: 기획자의 업무 범위 -->
+  <section class="slide">
+    <h2>기획자의 업무 범위</h2>
+    <p class="tag">신규 서비스 기준</p>
+
+    <div class="flow-diagram" style="margin-top: 2rem;">
+      <span class="flow-item">아이디어/니즈</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">구체화</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">자료조사</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">피드백</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">경쟁사 리서치</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">문제 정의</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">솔루션 도출</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">피처 구체화</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">페르소나 정리</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">유저 시나리오</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">고객 여정</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">셀링 포인트</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">랜딩 페이지</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">MVP 정의</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">기능 정의서</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">워크플로우</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-item">화면 기획서</span>
+    </div>
+
+    <div class="card-grid" style="margin-top: 3rem;">
+      <div class="card">
+        <h3 style="color: #ff6b6b;">전통적 방식</h3>
+        <p style="font-size: 2rem; color: #fff; margin: 0;">몇 개월 소요</p>
+      </div>
+      <div class="card" style="border-color: #667eea;">
+        <h3>오늘 목표</h3>
+        <p style="font-size: 2rem; color: #667eea; margin: 0;">하루 만에!</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 서론: 중요한 전제 -->
+  <section class="slide">
+    <h2>중요한 전제</h2>
+    <div class="big-quote" style="font-size: 2.2rem; max-width: 800px;">
+      "모든 것을 AI화 할 수 없습니다.<br><br>
+      AI는 생각의 출발점을 제공해주고,<br>
+      그 뒤에 <span class="highlight">휴먼 터치</span>는 항상 필수입니다."
+    </div>
+  </section>
+
+  <!-- Part 1: 왜 Claude Code인가? -->
+  <section class="slide" id="part1">
+    <span class="section-number">02</span>
+    <h2>Part 1: 왜 Claude Code인가?</h2>
+    <h3>AI 서비스 피로감</h3>
+
+    <div class="card-grid">
+      <div class="card">
+        <p style="margin: 0;"><strong>자료조사</strong><br><span style="color: #667eea;">Perplexity</span></p>
+      </div>
+      <div class="card">
+        <p style="margin: 0;"><strong>코드</strong><br><span style="color: #667eea;">Cursor, Copilot</span></p>
+      </div>
+      <div class="card">
+        <p style="margin: 0;"><strong>UX</strong><br><span style="color: #667eea;">Figma AI, Figjam</span></p>
+      </div>
+      <div class="card">
+        <p style="margin: 0;"><strong>글쓰기</strong><br><span style="color: #667eea;">ChatGPT, Notion AI</span></p>
+      </div>
+      <div class="card">
+        <p style="margin: 0;"><strong>분석</strong><br><span style="color: #667eea;">Claude...</span></p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 2rem; background: #1a1a1a; border-color: #ff6b6b;">
+      <h3 style="color: #ff6b6b;">문제점</h3>
+      <ul class="list">
+        <li>서비스마다 다른 UI 학습</li>
+        <li>컨텍스트가 분산됨</li>
+        <li>워크플로우 단절</li>
+        <li>결과물 통합의 어려움</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Part 1: 하나만 잘 쓰면 된다 -->
+  <section class="slide">
+    <h2>"하나만 잘 쓰면 된다"</h2>
+
+    <p class="big-quote" style="font-size: 2.5rem;">
+      굳이 많은 AI 서비스를<br>다 알 필요 없습니다.
+    </p>
+
+    <h3 style="margin-top: 3rem;">Claude Code가 좋은 이유:</h3>
+    <div class="steps">
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">컨텍스트 유지</h3>
+        <p>한 세션에서 모든 작업</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">파일 시스템 접근</h3>
+        <p>실제 문서 생성/수정</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">확장 가능</h3>
+        <p>MCP, Custom Commands로 나만의 워크플로우 구축</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">대화형</h3>
+        <p>기획은 대화로 발전하는 작업</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Part 1: 비교표 -->
+  <section class="slide">
+    <h2>Claude Code vs 다른 AI 도구</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>구분</th>
+          <th>ChatGPT/Claude Web</th>
+          <th>Cursor/Copilot</th>
+          <th style="color: #4ade80;">Claude Code</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>주 용도</td>
+          <td>대화/질문</td>
+          <td>코드 작성</td>
+          <td style="color: #4ade80;"><strong>모든 작업</strong></td>
+        </tr>
+        <tr>
+          <td>파일 시스템</td>
+          <td>X</td>
+          <td>코드 파일만</td>
+          <td style="color: #4ade80;"><strong>모든 파일</strong></td>
+        </tr>
+        <tr>
+          <td>워크플로우</td>
+          <td>수동</td>
+          <td>코드 특화</td>
+          <td style="color: #4ade80;"><strong>커스텀 가능</strong></td>
+        </tr>
+        <tr>
+          <td>컨텍스트</td>
+          <td>대화 내</td>
+          <td>코드베이스</td>
+          <td style="color: #4ade80;"><strong>프로젝트 전체</strong></td>
+        </tr>
+        <tr>
+          <td>기획 적합성</td>
+          <td>보조 도구</td>
+          <td>부적합</td>
+          <td style="color: #4ade80;"><strong>최적</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Part 1: Custom Commands -->
+  <section class="slide">
+    <h2>핵심: Custom Commands</h2>
+    <p>Claude Code의 진짜 힘 = <span class="emphasis">나만의 명령어</span></p>
+
+    <div class="code-block" style="margin-top: 2rem;">
+      <code>
+        <span class="command">/appkit.new</span> "테니스 코트 예약 앱"<br>
+        <span class="result">→ 서비스 컨셉, 타겟 고객, 핵심 가치 자동 도출</span><br><br>
+
+        <span class="command">/appkit.spec</span> 003-booking "메인화면에서 검색 후 바로 예약"<br>
+        <span class="result">→ 기능 구체화, 화면 흐름, 비즈니스 룰 자동 작성</span><br><br>
+
+        <span class="command">/appkit.customer</span><br>
+        <span class="result">→ 페르소나, 고객 여정 자동 생성</span>
+      </code>
+    </div>
+
+    <div class="card" style="margin-top: 2rem; border-color: #667eea;">
+      <p style="font-size: 1.5rem; text-align: center; margin: 0;">
+        <strong>포인트:</strong> AI를 "잘 쓰는" 게 아니라<br>
+        <span class="emphasis">"내 업무에 맞게" 만드는 것</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- Part 2: AppKit 소개 -->
+  <section class="slide" id="part2">
+    <span class="section-number">03</span>
+    <h2>Part 2: AppKit 프레임워크</h2>
+
+    <p class="big-quote">아이디어를 고객 가치로 변환하는<br>논리적 사고 프레임워크</p>
+
+    <h3 style="margin-top: 3rem;">핵심 철학:</h3>
+    <div class="card-grid">
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">고객 가치 우선</h3>
+        <p style="margin: 0; font-size: 1rem;">기능이 아닌 고객의 문제 해결 중심</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">논리적 사고 연습</h3>
+        <p style="margin: 0; font-size: 1rem;">큰 작업을 작은 단계로 쪼개기</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">스토리텔링 기반</h3>
+        <p style="margin: 0; font-size: 1rem;">고객의 하루와 고민을 이해하고 설득</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">MVP 중심 실행</h3>
+        <p style="margin: 0; font-size: 1rem;">최소한의 범위로 최대한의 검증</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Part 2: 7단계 -->
+  <section class="slide">
+    <h2>논리적 사고 7단계</h2>
+
+    <div class="code-block" style="font-size: 1.3rem;">
+      <code>
+        <span class="command">1. /appkit.new</span>      <span class="comment">→ 아이디어 스케치 (어떤 서비스인지?)</span><br>
+        <span class="command">2. /appkit.spec</span>     <span class="comment">→ 기능 구체화 (뭐가 필요할까? 누가 쓸까?)</span><br>
+        <span class="command">3. /appkit.customer</span> <span class="comment">→ 고객 스토리 (고객의 하루, 고민, 해결)</span><br>
+        <span class="command">4. /appkit.sales</span>    <span class="comment">→ 세일즈 랜딩 (어떻게 설득할까?)</span><br>
+        <span class="command">5. /appkit.mvp</span>      <span class="comment">→ MVP 범위 (최소한으로 검증하려면?)</span><br>
+        <span class="command">6. /appkit.merge</span>    <span class="comment">→ 기획 정돈 (흩어진 기획 통합)</span><br>
+        <span class="command">7. /appkit.design</span>   <span class="comment">→ 개발 준비 (API, ERD, 기술 스펙)</span>
+      </code>
+    </div>
+  </section>
+
+  <!-- Part 2: 데모 Step 1 -->
+  <section class="slide">
+    <h2>데모: 테니스 코트 예약 앱</h2>
+    <p class="tag">Step 1: 아이디어 스케치</p>
+
+    <div class="code-block">
+      <code><span class="command">/appkit.new</span> Tennis court booking app with coupons and time deals</code>
+    </div>
+
+    <h3 style="margin-top: 2rem;">결과물:</h3>
+    <ul class="list">
+      <li><strong>서비스 컨셉:</strong> "직장인의 주말 운동을 쉽게 만드는 예약 서비스"</li>
+      <li><strong>핵심 문제:</strong> 전화 예약 번거로움, 가격 불투명, 시간 확보 어려움</li>
+      <li><strong>해결책:</strong> 3초 예약, 가격 비교, 자동 할인</li>
+    </ul>
+  </section>
+
+  <!-- Part 2: 데모 Step 2 -->
+  <section class="slide">
+    <p class="tag">Step 2: 기능 구체화</p>
+
+    <div class="code-block">
+      <code><span class="command">/appkit.spec</span> 003-booking "퇴근길 지하철에서 3초 예약"</code>
+    </div>
+
+    <h3 style="margin-top: 2rem;">결과물:</h3>
+    <ul class="list">
+      <li>고객 가치 분석 (누가/언제/왜/어떻게)</li>
+      <li>화면 흐름 자동 생성</li>
+      <li>비즈니스 룰 도출</li>
+    </ul>
+  </section>
+
+  <!-- Part 2: 데모 Step 3 -->
+  <section class="slide">
+    <p class="tag">Step 3: 고객 스토리</p>
+
+    <div class="code-block">
+      <code><span class="command">/appkit.customer</span></code>
+    </div>
+
+    <div class="card" style="margin-top: 2rem;">
+      <h3>김대리 (35세, IT기업)의 하루:</h3>
+      <div class="code-block" style="background: transparent; border: none; padding: 0;">
+        <code>
+          <span style="color: #888;">07:00</span> - "오늘도 운동 못하겠네..." <span style="color: #ff6b6b;">(죄책감)</span><br>
+          <span style="color: #888;">12:00</span> - "주말엔 테니스 쳐야지" <span style="color: #fbbf24;">(결심)</span><br>
+          <span style="color: #888;">18:00</span> - "코트 예약 전화... 귀찮다" <span style="color: #ff6b6b;">(좌절)</span><br>
+          <span style="color: #888;">19:00</span> - [앱 발견] "3초 만에 예약?" <span style="color: #4ade80;">(희망)</span><br>
+          <span style="color: #888;">19:02</span> - "토요일 오전 예약 완료!" <span style="color: #4ade80;">(만족)</span>
+        </code>
+      </div>
+    </div>
+  </section>
+
+  <!-- Part 2: 산출물 -->
+  <section class="slide">
+    <h2>생성되는 산출물</h2>
+
+    <div class="code-block tree">
+      <code>
+docs/appkit/<br>
+├── <span class="file">overview.md</span>              <span class="comment"># 서비스 컨셉</span><br>
+├── specs/<br>
+│   ├── 001-search/<span class="file">spec.md</span>   <span class="comment"># 기능별 상세</span><br>
+│   ├── 002-booking/<span class="file">spec.md</span><br>
+│   └── ...<br>
+├── <span class="file">customer-persona.md</span>      <span class="comment"># 페르소나</span><br>
+├── <span class="file">customer-journey.md</span>      <span class="comment"># 고객 여정</span><br>
+├── <span class="file">sales-landing.md</span>         <span class="comment"># 세일즈 메시지</span><br>
+├── <span class="file">mvp-scope.md</span>             <span class="comment"># MVP 범위</span><br>
+├── <span class="folder">merge/</span>                   <span class="comment"># 통합 문서</span><br>
+└── <span class="folder">design/</span>                  <span class="comment"># 개발 스펙</span>
+      </code>
+    </div>
+
+    <p style="margin-top: 2rem; font-size: 1.5rem; text-align: center;">
+      ...이 모든 게 <span class="emphasis">하루 안에</span> 가능
+    </p>
+  </section>
+
+  <!-- Part 3: 여러분의 것을 만드세요 -->
+  <section class="slide" id="part3">
+    <span class="section-number">04</span>
+    <h2>Part 3: 여러분의 것을 만드세요</h2>
+
+    <div class="card" style="border-color: #ff6b6b; background: #1a1a1a;">
+      <h3 style="color: #ff6b6b;">중요</h3>
+      <p style="font-size: 1.8rem; color: #fff; margin: 0;">AppKit 자체가 정답이 아닙니다.</p>
+    </div>
+
+    <p style="margin-top: 2rem;">AppKit은 하나의 <strong>예시</strong>입니다:</p>
+    <ul class="list">
+      <li>제가 기획 업무를 하면서 필요했던 것</li>
+      <li>제 사고방식을 반영한 것</li>
+      <li>제 업무 플로우에 맞춘 것</li>
+    </ul>
+
+    <p style="margin-top: 2rem; font-size: 1.5rem; color: #667eea;">
+      <strong>여러분의 업무는 다릅니다.</strong>
+    </p>
+  </section>
+
+  <!-- Part 3: 오픈소스 -->
+  <section class="slide">
+    <h2>AppKit 오픈소스 공개</h2>
+
+    <div class="cta-box">
+      <p style="font-size: 1.2rem; color: #888; margin-bottom: 1rem;">GitHub에서 확인하세요</p>
+      <a href="https://github.com/rupy1014/appkit" target="_blank">github.com/rupy1014/appkit</a>
+    </div>
+
+    <ul class="list" style="margin-top: 2rem;">
+      <li>프롬프트 구조와 명령어 설계를 참고하세요</li>
+      <li>Fork해서 여러분 업무에 맞게 수정해서 쓰세요</li>
+      <li><strong>정답을 가져가는 게 아니라, 만드는 방법을 가져가세요</strong></li>
+    </ul>
+  </section>
+
+  <!-- Part 3: 나만의 프레임워크 -->
+  <section class="slide">
+    <h2>핵심은 "나만의 프레임워크"</h2>
+
+    <h3>생각해볼 질문:</h3>
+    <div class="steps">
+      <div class="step">
+        <p style="margin: 0;">내 업무에서 반복되는 패턴은?</p>
+      </div>
+      <div class="step">
+        <p style="margin: 0;">매번 같은 질문을 AI에게 하나?</p>
+      </div>
+      <div class="step">
+        <p style="margin: 0;">자주 만드는 문서 형식이 있나?</p>
+      </div>
+      <div class="step">
+        <p style="margin: 0;">팀에서 공유하면 좋을 워크플로우는?</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Part 3: Custom Command 만들기 -->
+  <section class="slide">
+    <h2>Custom Command 만들기</h2>
+    <p>Claude Code에서:</p>
+
+    <div class="code-block">
+      <code>
+<span class="comment"><!-- .claude/commands/my-task.md --></span><br>
+---<br>
+description: 내 업무를 자동화하는 명령어<br>
+---<br><br>
+
+## 입력<br>
+$ARGUMENTS<br><br>
+
+## 실행할 작업<br>
+1. [여러분의 업무 단계]<br>
+2. [여러분의 체크리스트]<br>
+3. [여러분의 출력 형식]
+      </code>
+    </div>
+  </section>
+
+  <!-- Part 3: 시작하는 방법 -->
+  <section class="slide">
+    <h2>시작하는 방법</h2>
+
+    <div class="steps">
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">관찰</h3>
+        <p>일주일간 반복 업무 기록</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">패턴화</h3>
+        <p>공통점 찾기</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">명령어화</h3>
+        <p>Custom Command 작성</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem;">개선</h3>
+        <p>사용하면서 다듬기</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 결론 -->
+  <section class="slide" id="conclusion">
+    <span class="section-number">05</span>
+    <h2>오늘의 핵심 메시지</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">AI 서비스 피로</h3>
+        <p style="margin: 0;">다 알 필요 없다,<br><span class="highlight">하나를 깊게</span></p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">Claude Code</h3>
+        <p style="margin: 0;"><span class="highlight">기획에 최적화</span>된 도구</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 1.2rem;">나만의 프레임워크</h3>
+        <p style="margin: 0;">AI를 "쓰는" 게 아니라<br><span class="highlight">"만드는" 것</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 마지막 -->
+  <section class="slide slide-title">
+    <div class="big-quote" style="text-align: center; border: none; padding: 0; max-width: 900px;">
+      "기획의 속도는 도구가 아니라<br>사고방식에서 나옵니다.<br><br>
+      AI는 그 사고를 구체화하는 도구일 뿐,<br>
+      <span class="highlight">여러분만의 방식</span>을 만들어가세요."
+    </div>
+  </section>
+
+  <!-- 참고 자료 -->
+  <section class="slide">
+    <h2>참고 자료</h2>
+
+    <div class="card" style="margin: 2rem 0;">
+      <h3>Claude Code</h3>
+      <a href="https://claude.ai/code" target="_blank" style="color: #667eea; font-size: 1.3rem;">claude.ai/code</a>
+    </div>
+
+    <div class="card" style="margin: 2rem 0; border-color: #667eea;">
+      <h3>AppKit 오픈소스</h3>
+      <a href="https://github.com/rupy1014/appkit" target="_blank" style="color: #667eea; font-size: 1.3rem;">github.com/rupy1014/appkit</a>
+      <p style="margin-top: 1rem; color: #888;">프롬프트와 명령어 구조 참고<br>Fork해서 여러분 업무에 맞게 수정해서 사용하세요</p>
+    </div>
+
+    <p style="margin-top: 3rem; text-align: center; color: #666; font-size: 1.5rem;">
+      감사합니다 🙏
+    </p>
+  </section>
+
+  <script>
+    // 모든 슬라이드 섹션 가져오기
+    const slides = document.querySelectorAll('.slide');
+    let currentSlide = 0;
+
+    // 현재 보이는 슬라이드 찾기
+    function getCurrentVisibleSlide() {
+      const scrollPos = window.scrollY + window.innerHeight / 3;
+      for (let i = slides.length - 1; i >= 0; i--) {
+        if (slides[i].offsetTop <= scrollPos) {
+          return i;
+        }
+      }
+      return 0;
+    }
+
+    // 슬라이드로 이동
+    function goToSlide(index) {
+      if (index >= 0 && index < slides.length) {
+        currentSlide = index;
+        slides[index].scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // 키보드 이벤트
+    document.addEventListener('keydown', (e) => {
+      currentSlide = getCurrentVisibleSlide();
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+        e.preventDefault();
+        goToSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goToSlide(currentSlide - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(slides.length - 1);
+      }
+    });
+
+    // 현재 슬라이드 인디케이터 표시
+    const indicator = document.createElement('div');
+    indicator.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #151515;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid #333;
+      color: #888;
+      font-size: 0.9rem;
+      z-index: 100;
+    `;
+    document.body.appendChild(indicator);
+
+    function updateIndicator() {
+      currentSlide = getCurrentVisibleSlide();
+      indicator.textContent = `${currentSlide + 1} / ${slides.length}`;
+    }
+
+    window.addEventListener('scroll', updateIndicator);
+    updateIndicator();
+  </script>
+
+</body>
+</html>

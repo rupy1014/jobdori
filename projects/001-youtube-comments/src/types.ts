@@ -31,6 +31,7 @@ export interface User {
   passwordHash: string
   name: string
   role: UserRole
+  openrouterApiKey?: string   // 사용자별 OpenRouter API Key (없으면 AI 기능 제한)
   createdAt: string
   updatedAt: string
   lastLoginAt?: string
@@ -71,6 +72,61 @@ export interface AuthResponse {
   error?: string
 }
 
+// ============================================
+// 채널 관련 타입
+// ============================================
+
+// 스케줄 설정
+export interface ChannelSchedule {
+  fetchInterval: 'hourly' | 'every30min' | 'every15min'  // 수집 주기
+  autoApprove: boolean                                    // 자동 승인 여부
+  approveAfterHours?: number                              // N시간 후 자동 승인 (autoApprove=true일 때)
+  approveTimes: string[]                                  // 승인 시간 (HH:MM 형식, KST)
+  timezone: string                                        // 타임존 (기본: Asia/Seoul)
+  pauseStart?: string                                     // 야간 정지 시작 (HH:MM, 예: "23:00")
+  pauseEnd?: string                                       // 야간 정지 종료 (HH:MM, 예: "07:00")
+}
+
+// YouTube 채널 인증 정보
+export interface YouTubeCredentials {
+  accessToken: string
+  refreshToken: string
+  expiresAt: string          // ISO 날짜
+  channelId: string          // YouTube 채널 ID (UC...)
+  channelTitle: string       // 채널 이름
+}
+
+// 채널 데이터
+export interface Channel {
+  id: string                  // 내부 채널 ID (uuid)
+  userId: string              // 소유자 사용자 ID
+  youtube: YouTubeCredentials // YouTube 인증 정보
+  settings: Settings          // 응답 설정 (persona, tone, etc.)
+  schedule: ChannelSchedule   // 스케줄 설정
+  isActive: boolean           // 활성화 여부
+  needsReauth?: boolean       // 재인증 필요 여부 (토큰 만료 시)
+  lastError?: string          // 마지막 오류 메시지
+  createdAt: string
+  updatedAt: string
+  lastFetchedAt?: string      // 마지막 수집 시간
+  lastApprovedAt?: string     // 마지막 승인 시간
+}
+
+// 기본 스케줄 설정
+export const DEFAULT_SCHEDULE: ChannelSchedule = {
+  fetchInterval: 'hourly',
+  autoApprove: true,
+  approveTimes: ['09:00', '14:00', '21:00'],
+  timezone: 'Asia/Seoul'
+}
+
+// 채널 등록 요청
+export interface RegisterChannelRequest {
+  code: string                 // OAuth authorization code
+  redirectUri: string
+  schedule?: Partial<ChannelSchedule>
+}
+
 // 댓글 분류 타입
 export type CommentType =
   | 'positive'   // 긍정적 (칭찬, 응원)
@@ -99,6 +155,7 @@ export type CommentStatus = 'unclassified' | 'pending' | 'generated' | 'replied'
 // 저장되는 댓글 데이터
 export interface StoredComment {
   id: string                    // YouTube 댓글 ID
+  channelId: string             // 내부 채널 ID (어느 채널의 댓글인지)
   videoId: string
   videoTitle: string
   authorName: string

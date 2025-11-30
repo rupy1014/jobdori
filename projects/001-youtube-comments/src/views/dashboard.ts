@@ -2,12 +2,27 @@
  * 대시보드 HTML 렌더링
  */
 
-import type { Env } from '../types'
-import { getStats, getLastFetchedAt } from '../lib/kv'
+import type { Env, Channel, User } from '../types'
+import { getStats, getLastFetchedAt, getChannelStats, getChannelLastFetchedAt } from '../lib/kv'
 
-export async function renderDashboard(env: Env): Promise<string> {
-  const stats = await getStats(env.KV)
-  const lastFetchedAt = await getLastFetchedAt(env.KV)
+interface DashboardProps {
+  currentChannel?: Channel
+  userChannels: Channel[]
+  user?: User
+}
+
+export async function renderDashboard(env: Env, props?: DashboardProps): Promise<string> {
+  const { currentChannel, userChannels = [], user } = props || {}
+
+  // 채널별 통계 사용 (채널이 있으면 채널 통계, 없으면 레거시 전역 통계)
+  const stats = currentChannel
+    ? await getChannelStats(env.KV, currentChannel.id)
+    : await getStats(env.KV)
+  const lastFetchedAt = currentChannel
+    ? await getChannelLastFetchedAt(env.KV, currentChannel.id)
+    : await getLastFetchedAt(env.KV)
+
+  const hasApiKey = !!user?.openrouterApiKey
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -90,6 +105,135 @@ export async function renderDashboard(env: Env): Promise<string> {
 
     .stat-card .value.replied {
       color: #10b981;
+    }
+
+    /* API Key 경고 배너 */
+    .warning-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, #422006 0%, #451a03 100%);
+      border: 1px solid #f59e0b;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+
+    .warning-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .warning-icon {
+      font-size: 24px;
+    }
+
+    .warning-text strong {
+      display: block;
+      color: #fcd34d;
+      margin-bottom: 2px;
+    }
+
+    .warning-text p {
+      color: #fde68a;
+      font-size: 13px;
+      margin: 0;
+    }
+
+    .warning-btn {
+      background: #f59e0b;
+      color: #000;
+      padding: 10px 16px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    .warning-btn:hover {
+      background: #fbbf24;
+    }
+
+    /* 워크플로우 가이드 */
+    .workflow-guide {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 20px;
+    }
+
+    .workflow-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #222;
+      opacity: 0.5;
+      transition: all 0.2s;
+    }
+
+    .workflow-step.current {
+      opacity: 1;
+      background: #172554;
+      border: 1px solid #3b82f6;
+    }
+
+    .workflow-step.done {
+      opacity: 1;
+      background: #052e16;
+      border: 1px solid #10b981;
+    }
+
+    .workflow-step .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .workflow-step.current .step-num {
+      background: #3b82f6;
+    }
+
+    .workflow-step.done .step-num {
+      background: #10b981;
+    }
+
+    .workflow-step .step-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .workflow-step .step-count {
+      font-size: 11px;
+      color: #10b981;
+      background: #052e16;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .workflow-step .step-count.warning {
+      color: #f59e0b;
+      background: #422006;
+    }
+
+    .workflow-arrow {
+      color: #555;
+      font-size: 14px;
     }
 
     .actions {
@@ -189,6 +333,171 @@ export async function renderDashboard(env: Env): Promise<string> {
 
     .btn-edit-sm:hover {
       background: #4b5563;
+    }
+
+    .btn-reject-sm {
+      padding: 4px 10px;
+      background: #dc2626;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: 5px;
+    }
+
+    .btn-reject-sm:hover {
+      background: #b91c1c;
+    }
+
+    /* 승인 대기 섹션 */
+    .pending-approval-section {
+      background: #1a1a1a;
+      border: 1px solid #3b82f6;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+
+    .pending-approval-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .pending-approval-header h2 {
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pending-approval-header .count {
+      background: #3b82f6;
+      color: white;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 14px;
+    }
+
+    .pending-approval-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .pending-approval-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+    }
+
+    .approval-card {
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 16px;
+      transition: border-color 0.2s;
+    }
+
+    .approval-card:hover {
+      border-color: #555;
+    }
+
+    .approval-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .approval-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .approval-card-meta .author {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .approval-card-meta .video {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .approval-card-meta .type-badge {
+      font-size: 11px;
+    }
+
+    .approval-card-time {
+      font-size: 11px;
+      color: #666;
+    }
+
+    .approval-card-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .approval-card-original,
+    .approval-card-reply {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .approval-card-original {
+      border-left: 3px solid #666;
+    }
+
+    .approval-card-reply {
+      border-left: 3px solid #3b82f6;
+    }
+
+    .approval-card-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .approval-card-text {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #ddd;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .approval-card-original .approval-card-text {
+      color: #aaa;
+    }
+
+    .approval-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .approval-card-actions button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    @media (max-width: 768px) {
+      .approval-card-content {
+        grid-template-columns: 1fr;
+      }
     }
 
     /* 모달 스타일 */
@@ -480,6 +789,118 @@ export async function renderDashboard(env: Env): Promise<string> {
       background: #444;
     }
 
+    /* 채널 선택 드롭다운 */
+    .channel-selector {
+      position: relative;
+    }
+
+    .channel-selector-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .channel-selector-btn:hover {
+      border-color: #555;
+      background: #222;
+    }
+
+    .channel-selector-btn .channel-icon {
+      font-size: 16px;
+    }
+
+    .channel-selector-btn .arrow {
+      font-size: 10px;
+      color: #888;
+      margin-left: 4px;
+    }
+
+    .channel-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      min-width: 250px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .channel-dropdown.show {
+      display: block;
+    }
+
+    .channel-dropdown-header {
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #666;
+      border-bottom: 1px solid #333;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .channel-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      color: #fff;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .channel-dropdown-item:hover {
+      background: #222;
+    }
+
+    .channel-dropdown-item.active {
+      background: #1e3a5f;
+    }
+
+    .channel-dropdown-item .icon {
+      font-size: 18px;
+    }
+
+    .channel-dropdown-item .info {
+      flex: 1;
+    }
+
+    .channel-dropdown-item .name {
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .channel-dropdown-item .stats {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .channel-dropdown-divider {
+      height: 1px;
+      background: #333;
+      margin: 4px 0;
+    }
+
+    .channel-dropdown-item.add-new {
+      color: #3b82f6;
+    }
+
+    .channel-dropdown-item.add-new:hover {
+      background: #172554;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -702,19 +1123,120 @@ export async function renderDashboard(env: Env): Promise<string> {
     .btn-save-settings:hover {
       background: #059669;
     }
+
+    .site-footer {
+      margin-top: 60px;
+      padding: 20px 0;
+      border-top: 1px solid #333;
+      text-align: center;
+    }
+
+    .footer-copy {
+      color: #555;
+      font-size: 12px;
+    }
+
+    .footer-copy a {
+      color: #555;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-copy a:hover {
+      color: #888;
+    }
+
+    .footer-copy a span {
+      color: #ef4444;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>🤖 YouTube 댓글 자동 응답 봇</h1>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <!-- 채널 선택 드롭다운 -->
+        <div class="channel-selector">
+          <button class="channel-selector-btn" onclick="toggleChannelDropdown()">
+            <span class="channel-icon">🎬</span>
+            <span>${currentChannel ? escapeHtml(currentChannel.youtube.channelTitle) : '채널 선택'}</span>
+            <span class="arrow">▼</span>
+          </button>
+          <div class="channel-dropdown" id="channelDropdown">
+            <div class="channel-dropdown-header">내 채널</div>
+            ${userChannels.length > 0 ? userChannels.map(ch => `
+              <a href="/channels/${ch.id}" class="channel-dropdown-item ${currentChannel?.id === ch.id ? 'active' : ''}">
+                <span class="icon">🎬</span>
+                <div class="info">
+                  <div class="name">${escapeHtml(ch.youtube.channelTitle)}</div>
+                  <div class="stats">${ch.isActive ? '활성' : '비활성'}</div>
+                </div>
+              </a>
+            `).join('') : `
+              <div class="channel-dropdown-item" style="color: #666; cursor: default;">
+                등록된 채널이 없습니다
+              </div>
+            `}
+            <div class="channel-dropdown-divider"></div>
+            <a href="/oauth/start" class="channel-dropdown-item add-new">
+              <span class="icon">➕</span>
+              <div class="info">
+                <div class="name">새 채널 추가</div>
+              </div>
+            </a>
+          </div>
+        </div>
+        <h1 style="font-size: 20px;">댓글 자동 응답</h1>
+      </div>
       <div style="display: flex; align-items: center; gap: 15px;">
         <span class="last-fetch">
           마지막 동기화: ${lastFetchedAt ? new Date(lastFetchedAt).toLocaleString('ko-KR') : '없음'}
         </span>
-        <a href="/oauth/start" class="btn-oauth" title="YouTube 권한 갱신">🔑 재인증</a>
+        <a href="/settings" class="btn-oauth" title="계정 설정 (API Key, 프로필)">⚙️ 계정</a>
+        <button onclick="logout()" class="btn-oauth" style="background: transparent; border: 1px solid #333; cursor: pointer;">🚪 로그아웃</button>
       </div>
     </header>
+
+    ${!hasApiKey ? `
+    <!-- API Key 미설정 경고 배너 -->
+    <div class="warning-banner">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-text">
+          <strong>AI 기능을 사용하려면 API Key가 필요합니다</strong>
+          <p>댓글 분류 및 응답 생성 기능을 사용하려면 OpenRouter API Key를 설정해주세요.</p>
+        </div>
+      </div>
+      <a href="/settings" class="warning-btn">API Key 설정하기 →</a>
+    </div>
+    ` : ''}
+
+    <!-- 워크플로우 안내 -->
+    <div class="workflow-guide">
+      <div class="workflow-step ${stats.total === 0 ? 'current' : 'done'}">
+        <span class="step-num">1</span>
+        <span class="step-label">댓글 가져오기</span>
+        ${stats.total > 0 ? `<span class="step-count">${stats.total}개</span>` : ''}
+      </div>
+      <div class="workflow-arrow">→</div>
+      <div class="workflow-step ${stats.total > 0 && stats.unclassified > 0 ? 'current' : stats.unclassified === 0 && stats.total > 0 ? 'done' : ''}">
+        <span class="step-num">2</span>
+        <span class="step-label">분류</span>
+        ${stats.unclassified > 0 ? `<span class="step-count warning">${stats.unclassified}개 대기</span>` : ''}
+      </div>
+      <div class="workflow-arrow">→</div>
+      <div class="workflow-step ${stats.pending > 0 ? 'current' : stats.generated > 0 || stats.replied > 0 ? 'done' : ''}">
+        <span class="step-num">3</span>
+        <span class="step-label">응답 생성</span>
+        ${stats.pending > 0 ? `<span class="step-count warning">${stats.pending}개 대기</span>` : ''}
+      </div>
+      <div class="workflow-arrow">→</div>
+      <div class="workflow-step ${stats.generated > 0 ? 'current' : stats.replied > 0 ? 'done' : ''}">
+        <span class="step-num">4</span>
+        <span class="step-label">승인</span>
+        ${stats.generated > 0 ? `<span class="step-count warning">${stats.generated}개 대기</span>` : ''}
+      </div>
+    </div>
 
     <div class="stats">
       <div class="stat-card">
@@ -744,11 +1266,11 @@ export async function renderDashboard(env: Env): Promise<string> {
         📥 댓글 가져오기
         <span class="loading" id="fetchLoading">⏳</span>
       </button>
-      <button class="btn-classify" id="classifyBtn" onclick="classifyComments()">
+      <button class="btn-classify" id="classifyBtn" onclick="classifyComments()" ${!hasApiKey ? 'disabled title="API Key를 먼저 설정하세요"' : ''}>
         🏷️ 자동 분류
         <span class="loading" id="classifyLoading">⏳</span>
       </button>
-      <button class="btn-generate" id="generateBtn" onclick="generateReplies()">
+      <button class="btn-generate" id="generateBtn" onclick="generateReplies()" ${!hasApiKey ? 'disabled title="API Key를 먼저 설정하세요"' : ''}>
         ✍️ 응답 생성
         <span class="loading" id="generateLoading">⏳</span>
       </button>
@@ -758,10 +1280,29 @@ export async function renderDashboard(env: Env): Promise<string> {
       </button>
     </div>
 
-    <!-- 응답 지침 설정 섹션 -->
+    <!-- 승인 대기 섹션 -->
+    <div class="pending-approval-section" id="pendingApprovalSection" style="display: ${stats.generated > 0 ? 'block' : 'none'};">
+      <div class="pending-approval-header">
+        <h2>
+          ⏳ 승인 대기 중
+          <span class="count" id="pendingCount">${stats.generated}</span>
+        </h2>
+        <button class="btn-approve" onclick="approveAll()" style="padding: 8px 16px; font-size: 14px;">
+          ✅ 모두 승인
+        </button>
+      </div>
+      <div class="pending-approval-list" id="pendingApprovalList">
+        <!-- JS로 동적 렌더링 -->
+        <div class="pending-approval-empty">
+          <p>승인 대기 중인 응답이 없습니다</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 채널 응답 지침 설정 섹션 -->
     <div class="settings-section">
       <div class="settings-header" onclick="toggleSettings()">
-        <h2>⚙️ 분류별 응답 지침</h2>
+        <h2>📝 이 채널의 응답 지침</h2>
         <span class="settings-toggle" id="settingsToggle">▼ 펼치기</span>
       </div>
       <div class="settings-content" id="settingsContent">
@@ -818,6 +1359,13 @@ export async function renderDashboard(env: Env): Promise<string> {
     </table>
 
     <div class="pagination" id="pagination"></div>
+
+    <footer class="site-footer">
+      <div class="footer-copy">
+        © 2025 Autonomey. All rights reserved.<br>
+        <a href="https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4" target="_blank" rel="noopener">Made with ❤️ by <span>AI잡돌이</span></a>
+      </div>
+    </footer>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -839,6 +1387,9 @@ export async function renderDashboard(env: Env): Promise<string> {
   </div>
 
   <script>
+    // 현재 채널 ID (채널별 API 호출에 사용)
+    const channelId = '${currentChannel?.id || ''}';
+
     let currentPage = 1;
     let currentStatus = 'all';
     const limit = 20;
@@ -910,12 +1461,13 @@ export async function renderDashboard(env: Env): Promise<string> {
     document.addEventListener('DOMContentLoaded', () => {
       loadComments();
       loadSettings();
+      loadPendingApprovals();
     });
 
     // 댓글 목록 불러오기
     async function loadComments() {
       try {
-        const res = await apiCall(\`/api/comments?page=\${currentPage}&limit=\${limit}&status=\${currentStatus}\`);
+        const res = await apiCall(\`/api/channels/\${channelId}/comments?page=\${currentPage}&limit=\${limit}&status=\${currentStatus}\`);
         const data = await res.json();
 
         if (data.success) {
@@ -995,6 +1547,179 @@ export async function renderDashboard(env: Env): Promise<string> {
       loadComments();
     }
 
+    // 승인 대기 목록 불러오기
+    let pendingApprovalsCache = [];
+
+    async function loadPendingApprovals() {
+      try {
+        const res = await apiCall(\`/api/channels/\${channelId}/comments?status=generated&limit=50\`);
+        const data = await res.json();
+
+        if (data.success) {
+          pendingApprovalsCache = data.data.comments || [];
+          renderPendingApprovals(pendingApprovalsCache);
+        }
+      } catch (error) {
+        console.error('Failed to load pending approvals:', error);
+      }
+    }
+
+    // 승인 대기 목록 렌더링
+    function renderPendingApprovals(comments) {
+      const section = document.getElementById('pendingApprovalSection');
+      const list = document.getElementById('pendingApprovalList');
+      const countEl = document.getElementById('pendingCount');
+
+      if (!comments || comments.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+      countEl.textContent = comments.length;
+
+      list.innerHTML = comments.map(comment => {
+        const sanitizedText = sanitizeHtml(comment.text || '');
+        const sanitizedReply = sanitizeHtml(comment.replyText || '');
+        const decodedAuthor = decodeHtmlEntities(comment.authorName || '');
+        const generatedTime = comment.generatedAt ? formatRelativeTime(comment.generatedAt) : '';
+
+        return \`
+          <div class="approval-card" id="approval-card-\${comment.id}">
+            <div class="approval-card-header">
+              <div class="approval-card-meta">
+                <span class="author">\${escapeHtml(decodedAuthor)}</span>
+                <span class="badge \${comment.type || 'other'} type-badge">\${getTypeLabel(comment.type)}</span>
+                <span class="video">📺 \${escapeHtml(comment.videoTitle || '').substring(0, 30)}...</span>
+              </div>
+              <span class="approval-card-time">\${generatedTime}</span>
+            </div>
+            <div class="approval-card-content">
+              <div class="approval-card-original">
+                <div class="approval-card-label">💬 원본 댓글</div>
+                <div class="approval-card-text">\${sanitizedText}</div>
+              </div>
+              <div class="approval-card-reply">
+                <div class="approval-card-label">🤖 AI 응답</div>
+                <div class="approval-card-text" id="reply-text-\${comment.id}">\${sanitizedReply}</div>
+              </div>
+            </div>
+            <div class="approval-card-actions">
+              <button class="btn-edit-sm" onclick="openEditModalFromCard('\${comment.id}')" style="padding: 8px 16px;">
+                ✏️ 수정
+              </button>
+              <button class="btn-reject-sm" onclick="rejectComment('\${comment.id}')" style="padding: 8px 16px;">
+                ❌ 삭제
+              </button>
+              <button class="btn-approve" onclick="approveCommentFromCard('\${comment.id}')" style="padding: 8px 16px; font-size: 13px;">
+                ✅ 승인
+              </button>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
+
+    // 상대 시간 포맷
+    function formatRelativeTime(dateStr) {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffHour = Math.floor(diffMs / 3600000);
+      const diffDay = Math.floor(diffMs / 86400000);
+
+      if (diffMin < 1) return '방금 전';
+      if (diffMin < 60) return \`\${diffMin}분 전\`;
+      if (diffHour < 24) return \`\${diffHour}시간 전\`;
+      return \`\${diffDay}일 전\`;
+    }
+
+    // 카드에서 수정 모달 열기
+    function openEditModalFromCard(commentId) {
+      const comment = pendingApprovalsCache.find(c => c.id === commentId);
+      if (!comment) {
+        showToast('댓글을 찾을 수 없습니다', 'error');
+        return;
+      }
+
+      editingCommentId = commentId;
+      document.getElementById('modalOriginalComment').textContent = comment.text;
+      document.getElementById('modalReplyText').value = comment.replyText || '';
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    // 카드에서 승인
+    async function approveCommentFromCard(commentId) {
+      const card = document.getElementById(\`approval-card-\${commentId}\`);
+      if (card) {
+        card.style.opacity = '0.5';
+        card.style.pointerEvents = 'none';
+      }
+
+      try {
+        const res = await apiCall(\`/api/channels/\${channelId}/comments/\${commentId}/approve\`, { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast('✅ YouTube에 게시되었습니다', 'success');
+          // 카드 제거
+          if (card) card.remove();
+          // 캐시에서 제거
+          pendingApprovalsCache = pendingApprovalsCache.filter(c => c.id !== commentId);
+          // 카운트 업데이트
+          const countEl = document.getElementById('pendingCount');
+          countEl.textContent = pendingApprovalsCache.length;
+          // 비어있으면 섹션 숨기기
+          if (pendingApprovalsCache.length === 0) {
+            document.getElementById('pendingApprovalSection').style.display = 'none';
+          }
+          // 1초 후 페이지 새로고침 (통계 업데이트)
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          if (card) {
+            card.style.opacity = '1';
+            card.style.pointerEvents = 'auto';
+          }
+          showToast(data.error || '승인 실패', 'error');
+        }
+      } catch (error) {
+        if (card) {
+          card.style.opacity = '1';
+          card.style.pointerEvents = 'auto';
+        }
+        showToast('네트워크 오류', 'error');
+      }
+    }
+
+    // 응답 삭제 (pending으로 되돌리기)
+    async function rejectComment(commentId) {
+      if (!confirm('이 응답을 삭제하시겠습니까? 댓글은 "미응답" 상태로 돌아갑니다.')) return;
+
+      try {
+        const res = await apiCall(\`/api/channels/\${channelId}/comments/\${commentId}/reply\`, {
+          method: 'DELETE'
+        });
+
+        if (!res.success) {
+          throw new Error(res.error || '응답 삭제 실패');
+        }
+
+        showToast('응답이 삭제되었습니다', 'success');
+        const card = document.getElementById(\`approval-card-\${commentId}\`);
+        if (card) card.remove();
+        pendingApprovalsCache = pendingApprovalsCache.filter(c => c.id !== commentId);
+        const countEl = document.getElementById('pendingCount');
+        countEl.textContent = pendingApprovalsCache.length;
+        if (pendingApprovalsCache.length === 0) {
+          document.getElementById('pendingApprovalSection').style.display = 'none';
+        }
+        setTimeout(() => location.reload(), 1500);
+      } catch (error) {
+        showToast('삭제 실패', 'error');
+      }
+    }
+
     // 댓글 가져오기
     async function fetchComments() {
       const btn = document.getElementById('fetchBtn');
@@ -1004,7 +1729,7 @@ export async function renderDashboard(env: Env): Promise<string> {
       loading.classList.add('show');
 
       try {
-        const res = await apiCall('/api/fetch', { method: 'POST' });
+        const res = await apiCall(\`/api/channels/\${channelId}/fetch\`, { method: 'POST' });
         const data = await res.json();
 
         if (data.success) {
@@ -1031,7 +1756,7 @@ export async function renderDashboard(env: Env): Promise<string> {
       loading.classList.add('show');
 
       try {
-        const res = await apiCall('/api/classify', { method: 'POST' });
+        const res = await apiCall(\`/api/channels/\${channelId}/classify\`, { method: 'POST' });
         const data = await res.json();
 
         if (data.success) {
@@ -1058,7 +1783,7 @@ export async function renderDashboard(env: Env): Promise<string> {
       loading.classList.add('show');
 
       try {
-        const res = await apiCall('/api/generate', { method: 'POST' });
+        const res = await apiCall(\`/api/channels/\${channelId}/generate\`, { method: 'POST' });
         const data = await res.json();
 
         if (data.success) {
@@ -1085,7 +1810,7 @@ export async function renderDashboard(env: Env): Promise<string> {
       loading.classList.add('show');
 
       try {
-        const res = await apiCall('/api/approve-all', { method: 'POST' });
+        const res = await apiCall(\`/api/channels/\${channelId}/approve-all\`, { method: 'POST' });
         const data = await res.json();
 
         if (data.success) {
@@ -1106,7 +1831,7 @@ export async function renderDashboard(env: Env): Promise<string> {
     // 개별 승인
     async function approveComment(commentId) {
       try {
-        const res = await apiCall(\`/api/comments/\${commentId}/approve\`, { method: 'POST' });
+        const res = await apiCall(\`/api/channels/\${channelId}/comments/\${commentId}/approve\`, { method: 'POST' });
         const data = await res.json();
 
         if (data.success) {
@@ -1148,7 +1873,7 @@ export async function renderDashboard(env: Env): Promise<string> {
       const replyText = document.getElementById('modalReplyText').value;
 
       try {
-        const res = await apiCall(\`/api/comments/\${editingCommentId}/reply\`, {
+        const res = await apiCall(\`/api/channels/\${channelId}/comments/\${editingCommentId}/reply\`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ replyText })
@@ -1173,6 +1898,30 @@ export async function renderDashboard(env: Env): Promise<string> {
         closeEditModal();
       }
     });
+
+    // 채널 드롭다운 토글
+    function toggleChannelDropdown() {
+      const dropdown = document.getElementById('channelDropdown');
+      dropdown.classList.toggle('show');
+    }
+
+    // 드롭다운 외부 클릭시 닫기
+    document.addEventListener('click', (e) => {
+      const selector = document.querySelector('.channel-selector');
+      const dropdown = document.getElementById('channelDropdown');
+      if (selector && !selector.contains(e.target)) {
+        dropdown.classList.remove('show');
+      }
+    });
+
+    // 로그아웃
+    function logout() {
+      if (!confirm('로그아웃 하시겠습니까?')) return;
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      document.cookie = 'token=; path=/; max-age=0';
+      window.location.href = '/login';
+    }
 
     // 토스트 메시지
     function showToast(message, type) {
@@ -1264,7 +2013,7 @@ export async function renderDashboard(env: Env): Promise<string> {
     // 설정 불러오기
     async function loadSettings() {
       try {
-        const res = await apiCall('/api/settings');
+        const res = await apiCall(\`/api/channels/\${channelId}/settings\`);
         const data = await res.json();
 
         if (data.success && data.data) {
@@ -1349,7 +2098,7 @@ export async function renderDashboard(env: Env): Promise<string> {
           typeInstructions
         };
 
-        const res = await apiCall('/api/settings', {
+        const res = await apiCall(\`/api/channels/\${channelId}/settings\`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedSettings)
@@ -1385,4 +2134,16 @@ export async function renderDashboard(env: Env): Promise<string> {
   </script>
 </body>
 </html>`
+}
+
+/**
+ * HTML 이스케이프 헬퍼
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }

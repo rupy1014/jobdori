@@ -5,8 +5,9 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev src/index.ts --port 8788 --no-live-reload",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev src/index.ts --port 8788",
+    "dev:pages": "wrangler pages dev ./public --kv KV --compatibility-flags nodejs_compat_v2 --port 8788",
+    "deploy": "wrangler pages deploy ./public --project-name autonomey",
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "kv:create": "wrangler kv:namespace create COMMENTS_KV",

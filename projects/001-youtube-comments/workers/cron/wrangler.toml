@@ -1,0 +1,18 @@
+# Autonomey Cron Worker
+# Pages 앱의 스케줄 API를 주기적으로 호출하는 Worker
+
+name = "autonomey-cron"
+main = "index.ts"
+compatibility_date = "2025-03-05"
+compatibility_flags = ["nodejs_compat_v2"]
+
+# 환경 변수
+[vars]
+PAGES_URL = "https://autonomey.pages.dev"
+
+# Cron 트리거
+[triggers]
+crons = ["*/15 * * * *", "*/30 * * * *"]
+
+# Secrets (Cloudflare Dashboard에서 설정)
+# CRON_SECRET - Pages의 JWT_SECRET과 동일한 값

@@ -3,11 +3,11 @@
  */
 
 import { Hono } from 'hono'
-import type { Env, ApiResponse, StoredComment } from '../types'
+import type { Env, ApiResponse, StoredComment, User, JWTPayload } from '../types'
 
 // Services
 import { fetchComments } from '../services/youtube'
-import { classifyComment, generateReplyForComment, generateRepliesForComments, replyToComment } from '../services/llm'
+import { classifyComment, generateReplyForComment, generateRepliesForComments, replyToComment, type LLMOptions } from '../services/llm'
 
 // KV helpers
 import {
@@ -22,7 +22,23 @@ import {
   getLastFetchedAt
 } from '../lib/kv'
 
-const api = new Hono<{ Bindings: Env }>()
+// Variables 타입 (index.ts에서 설정)
+type Variables = {
+  jwtPayload: JWTPayload
+  user: User
+}
+
+const api = new Hono<{ Bindings: Env; Variables: Variables }>()
+
+/**
+ * 유저의 API Key로 LLM 옵션 생성
+ */
+function getLLMOptions(c: { get: (key: 'user') => User | undefined }): LLMOptions {
+  const user = c.get('user')
+  return {
+    apiKey: user?.openrouterApiKey
+  }
+}
 
 /**
  * 댓글 목록 조회
@@ -104,10 +120,12 @@ api.post('/classify', async (c) => {
     let classifiedCount = 0
     const errors: string[] = []
 
+    const llmOptions = getLLMOptions(c)
+
     for (const comment of unclassifiedComments) {
       try {
-        // AI로 댓글 분류
-        const classification = await classifyComment(c.env, comment.text)
+        // AI로 댓글 분류 (유저의 API Key 사용)
+        const classification = await classifyComment(c.env, comment.text, llmOptions)
 
         // 분류 결과 업데이트
         await updateComment(c.env.KV, comment.id, {
@@ -159,11 +177,12 @@ api.post('/generate', async (c) => {
     }
 
     const settings = await getSettings(c.env.KV)
+    const llmOptions = getLLMOptions(c)
     let generatedCount = 0
     const errors: string[] = []
 
-    // 배치로 한 번에 응답 생성
-    const repliesMap = await generateRepliesForComments(c.env, pendingComments, settings)
+    // 배치로 한 번에 응답 생성 (유저의 API Key 사용)
+    const repliesMap = await generateRepliesForComments(c.env, pendingComments, settings, llmOptions)
 
     // 각 댓글 업데이트
     for (const comment of pendingComments) {
@@ -366,9 +385,10 @@ api.post('/comments/:id/reply', async (c) => {
     }
 
     const settings = await getSettings(c.env.KV)
+    const llmOptions = getLLMOptions(c)
 
-    // 커스텀 응답이 있으면 사용, 없으면 AI 생성
-    const replyText = body.customReply || await generateReplyForComment(c.env, comment, settings)
+    // 커스텀 응답이 있으면 사용, 없으면 AI 생성 (유저의 API Key 사용)
+    const replyText = body.customReply || await generateReplyForComment(c.env, comment, settings, llmOptions)
 
     // YouTube에 댓글 게시
     await replyToComment(c.env, comment.id, replyText)

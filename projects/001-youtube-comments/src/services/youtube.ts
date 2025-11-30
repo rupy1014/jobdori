@@ -4,13 +4,42 @@
  * - 댓글 게시
  */
 
-import type { Env, StoredComment, YouTubeCommentThread, YouTubeVideo } from '../types'
-import { saveComment, commentExists, setLastFetchedAt } from '../lib/kv'
+import type { Env, StoredComment, YouTubeCommentThread, YouTubeVideo, Channel, YouTubeCredentials } from '../types'
+import { saveComment, commentExists, setLastFetchedAt, saveChannel, getChannelById, getChannelByYouTubeId, updateChannel } from '../lib/kv'
+import { DEFAULT_SETTINGS, DEFAULT_SCHEDULE } from '../types'
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
 
 /**
- * KV에서 저장된 토큰 가져오기
+ * 채널별 토큰 키
+ */
+const getChannelTokensKey = (channelId: string) => `channel:${channelId}:tokens`
+
+/**
+ * 채널별 토큰 가져오기
+ */
+async function getChannelTokens(kv: KVNamespace, channelId: string): Promise<{
+  accessToken?: string
+  refreshToken?: string
+  expiresAt?: number
+} | null> {
+  const data = await kv.get(getChannelTokensKey(channelId), 'json')
+  return data as any
+}
+
+/**
+ * 채널별 토큰 저장하기
+ */
+async function saveChannelTokens(kv: KVNamespace, channelId: string, tokens: {
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+}): Promise<void> {
+  await kv.put(getChannelTokensKey(channelId), JSON.stringify(tokens))
+}
+
+/**
+ * 레거시: KV에서 저장된 토큰 가져오기 (단일 채널 모드 하위 호환용)
  */
 async function getStoredTokens(kv: KVNamespace): Promise<{
   accessToken?: string
@@ -22,7 +51,7 @@ async function getStoredTokens(kv: KVNamespace): Promise<{
 }
 
 /**
- * KV에 토큰 저장하기
+ * 레거시: KV에 토큰 저장하기 (단일 채널 모드 하위 호환용)
  */
 async function saveTokens(kv: KVNamespace, tokens: {
   accessToken: string
@@ -89,10 +118,65 @@ async function refreshAccessToken(env: Env): Promise<string> {
 }
 
 /**
- * Authorization code로 토큰 교환 (OAuth 콜백에서 사용)
+ * YouTube 채널 정보 가져오기 (access token으로)
  */
-export async function exchangeCodeForTokens(env: Env, code: string, redirectUri: string): Promise<void> {
-  const response = await fetch('https://oauth2.googleapis.com/token', {
+async function getMyChannelInfo(accessToken: string): Promise<{
+  channelId: string
+  channelTitle: string
+}> {
+  const response = await fetch(
+    `${YOUTUBE_API_BASE}/channels?part=snippet&mine=true`,
+    {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    }
+  )
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to get channel info: ${errorText}`)
+  }
+
+  const data = await response.json() as {
+    items: Array<{
+      id: string
+      snippet: {
+        title: string
+      }
+    }>
+  }
+
+  const firstItem = data.items?.[0]
+  if (!firstItem) {
+    throw new Error('No YouTube channel found for this account')
+  }
+
+  return {
+    channelId: firstItem.id,
+    channelTitle: firstItem.snippet.title
+  }
+}
+
+/**
+ * UUID 생성
+ */
+function generateChannelId(): string {
+  return crypto.randomUUID()
+}
+
+/**
+ * Authorization code로 토큰 교환 + 채널 생성 (OAuth 콜백에서 사용)
+ * @returns 생성된 Channel 객체
+ */
+export async function exchangeCodeForTokens(
+  env: Env,
+  code: string,
+  redirectUri: string,
+  userId: string
+): Promise<Channel> {
+  // 1. 토큰 교환
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -106,29 +190,121 @@ export async function exchangeCodeForTokens(env: Env, code: string, redirectUri:
     }),
   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
+  if (!tokenResponse.ok) {
+    const errorText = await tokenResponse.text()
     throw new Error(`Failed to exchange code: ${errorText}`)
   }
 
-  const data = await response.json() as {
+  const tokenData = await tokenResponse.json() as {
     access_token: string
     refresh_token: string
     expires_in: number
   }
 
-  // KV에 토큰 저장
-  await saveTokens(env.KV, {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + (data.expires_in * 1000)
+  // 2. YouTube 채널 정보 가져오기
+  const channelInfo = await getMyChannelInfo(tokenData.access_token)
+
+  // 3. 이미 등록된 채널인지 확인
+  const existingChannel = await getChannelByYouTubeId(env.KV, channelInfo.channelId)
+
+  if (existingChannel) {
+    // 이미 등록된 채널 - 토큰만 업데이트
+    const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
+
+    await updateChannel(env.KV, existingChannel.id, {
+      youtube: {
+        ...existingChannel.youtube,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        expiresAt,
+        channelTitle: channelInfo.channelTitle  // 채널명 업데이트
+      }
+    })
+
+    // 채널별 토큰도 저장
+    await saveChannelTokens(env.KV, existingChannel.id, {
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
+      expiresAt: Date.now() + (tokenData.expires_in * 1000)
+    })
+
+    // 업데이트된 채널 반환
+    const updatedChannel = await getChannelById(env.KV, existingChannel.id)
+    return updatedChannel!
+  }
+
+  // 4. 새 채널 생성
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
+  const newChannelId = generateChannelId()
+
+  const youtubeCredentials: YouTubeCredentials = {
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    expiresAt,
+    channelId: channelInfo.channelId,
+    channelTitle: channelInfo.channelTitle
+  }
+
+  const channel: Channel = {
+    id: newChannelId,
+    userId,
+    youtube: youtubeCredentials,
+    settings: { ...DEFAULT_SETTINGS },
+    schedule: { ...DEFAULT_SCHEDULE },
+    isActive: true,
+    createdAt: now,
+    updatedAt: now
+  }
+
+  // 5. 채널 저장
+  await saveChannel(env.KV, channel)
+
+  // 6. 채널별 토큰 저장
+  await saveChannelTokens(env.KV, newChannelId, {
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    expiresAt: Date.now() + (tokenData.expires_in * 1000)
   })
+
+  // 레거시 토큰도 저장 (하위 호환)
+  await saveTokens(env.KV, {
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    expiresAt: Date.now() + (tokenData.expires_in * 1000)
+  })
+
+  return channel
+}
+
+/**
+ * Base64url 인코딩 (Cloudflare Workers 호환)
+ */
+function base64urlEncode(str: string): string {
+  const base64 = btoa(str)
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+/**
+ * Base64url 디코딩 (Cloudflare Workers 호환)
+ */
+function base64urlDecode(str: string): string {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  // Padding
+  while (base64.length % 4) {
+    base64 += '='
+  }
+  return atob(base64)
 }
 
 /**
  * OAuth 인증 URL 생성
+ * @param userId 현재 로그인한 사용자 ID (state로 전달)
  */
-export function getOAuthUrl(env: Env, redirectUri: string): string {
+export function getOAuthUrl(env: Env, redirectUri: string, userId: string): string {
+  // state에 userId를 포함 (콜백에서 어떤 사용자의 채널인지 알기 위해)
+  const state = base64urlEncode(JSON.stringify({ userId }))
+
   const params = new URLSearchParams({
     client_id: env.YOUTUBE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -136,8 +312,21 @@ export function getOAuthUrl(env: Env, redirectUri: string): string {
     scope: 'https://www.googleapis.com/auth/youtube.force-ssl',
     access_type: 'offline',
     prompt: 'consent',  // 항상 refresh token 발급
+    state,
   })
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`
+}
+
+/**
+ * OAuth state 파라미터 파싱
+ */
+export function parseOAuthState(state: string): { userId: string } | null {
+  try {
+    const decoded = base64urlDecode(state)
+    return JSON.parse(decoded)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -348,9 +537,10 @@ export async function fetchComments(env: Env): Promise<{
       // 내 채널이 이미 답글을 달았는지 확인
       const { hasReply, replyText } = await checkMyReply(env, thread, env.YOUTUBE_CHANNEL_ID)
 
-      // 저장할 댓글 데이터 생성
+      // 저장할 댓글 데이터 생성 (레거시 단일 채널용)
       const storedComment: StoredComment = {
         id: commentId,
+        channelId: '',  // 레거시: 단일 채널 모드에서는 빈 문자열
         videoId,
         videoTitle: videoInfo.title,
         authorName: commentData.authorDisplayName,

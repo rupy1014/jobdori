@@ -390,6 +390,72 @@ Agent: [Converts narration to SEO-optimized blog post]
 - Repurposing content maximizes ROI on content creation effort
 - Dual distribution = 2x audience reach
 
+### 5. YouTube Shorts Creator (`youtube-shorts-creator`) ✨ NEW
+**Purpose**: Generate 1-minute YouTube Shorts scripts optimized for automation/vibe-coding content
+
+**Use Cases**:
+- Create 1-minute shorts from automation projects
+- Compress long narration scripts into shorts format
+- Generate vibe-coding/Claude Code demonstration shorts
+- Quick content for SNS promotion
+
+**Activation**: Request "쇼츠 대본", "1분 영상", "숏폼 만들어줘", "쇼츠로 압축해줘"
+
+**Key Concepts**:
+- **Two Rabbits**: Technical credibility (전문성) + Fun delivery (재미)
+- **Automation Formula**: [What I made] + [Tech stack] + [Before/After impact]
+- Professional terms + casual speaking style = "와 진짜네" + "끝까지 봐야지"
+
+**1-Minute Structure**:
+```
+[0:00-0:05] Hook - "OO 자동화했습니다 + 임팩트 수치"
+[0:05-0:10] Problem - "OO 하다가 지쳐서/손목 나가겠길래"
+[0:10-0:18] 뜬금 삽입 - "원래 자동화라는 게~ 근데 이건 쉽다"
+[0:18-0:35] Tech explanation - 기술 용어 + "딱 돼" 리듬
+[0:35-0:45] Process - 실제 구현 단계 빠르게 나열
+[0:45-0:52] Viewer question - "넌 어때요? / 나만 그래?"
+[0:52-1:00] Result + Twist - "나이스~ + 반전"
+```
+
+**Key Features**:
+- 수리왕 스타일 말투 변환 (교육적 → 재밌게)
+- 15초마다 재미 요소 체크리스트
+- 기술 용어 자연스럽게 삽입하는 패턴
+- 긴 대본 → 쇼츠 3단계 압축 방법
+- 썸네일 텍스트 + 자막 강조 포인트 자동 생성
+
+**Output Structure**:
+```
+## [제목] - 1분 쇼츠 대본
+
+### 타임라인
+[0:00] ...
+[0:05] ...
+
+### 썸네일 텍스트
+"[충격] OO 자동화?! 코딩 0줄"
+
+### 자막 강조 포인트
+| 타임 | 텍스트 | 효과 |
+
+### 기술 스택 (설명란용)
+```
+
+**Example Usage**:
+```
+User: "유튜브 댓글 봇 쇼츠로 만들어줘"
+Agent: [Generates 1-min script with timestamps, thumbnail, captions]
+
+User: "4편 대본을 쇼츠로 압축해줘"
+Agent: [Extracts 1 automation point → compresses to 60 seconds]
+```
+
+**Prohibited**:
+- ❌ "안녕하세요, 오늘은~" (인사)
+- ❌ "구독과 좋아요 부탁드립니다" (첫 15초 내)
+- ❌ 기술 설명만 2문장 이상 연속
+- ❌ 재미 요소 없이 15초 이상 진행
+
 ## Future Development
 
 When expanding this repository:
