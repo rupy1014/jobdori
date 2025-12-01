@@ -15,6 +15,7 @@ export type Env = {
   YOUTUBE_CLIENT_SECRET: string
   OPENROUTER_API_KEY: string
   ENVIRONMENT: string
+  BASE_URL?: string  // SEO용 사이트 기본 URL (기본값: https://autonomey.com)
 }
 
 // ============================================

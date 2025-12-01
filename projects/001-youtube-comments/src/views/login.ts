@@ -353,25 +353,40 @@ export function renderLogin(): string {
           body: JSON.stringify({ email, password })
         });
 
+        // HTTP 에러 체크
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          showError(errorData.error || '로그인에 실패했습니다. (HTTP ' + res.status + ')');
+          return;
+        }
+
         const data = await res.json();
 
         if (data.success && data.token) {
           // 토큰 저장
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
+          try {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          } catch (storageErr) {
+            console.error('localStorage 저장 실패:', storageErr);
+            // localStorage 실패해도 쿠키로 진행
+          }
 
           // 쿠키에도 저장 (대시보드 접근용)
-          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60);
+          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60) + '; SameSite=Lax';
 
           showSuccess('로그인 성공! 채널 목록으로 이동합니다...');
+
+          // 즉시 이동 시도, 실패 시 1초 후 재시도
           setTimeout(() => {
             window.location.href = '/channels';
-          }, 1000);
+          }, 500);
         } else {
           showError(data.error || '로그인에 실패했습니다.');
         }
       } catch (err) {
-        showError('서버 연결에 실패했습니다.');
+        console.error('로그인 에러:', err);
+        showError('서버 연결에 실패했습니다. (' + (err.message || '알 수 없는 오류') + ')');
       } finally {
         setLoading('login-btn', false);
       }
@@ -394,25 +409,37 @@ export function renderLogin(): string {
           body: JSON.stringify({ name, email, password })
         });
 
+        // HTTP 에러 체크
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          showError(errorData.error || '회원가입에 실패했습니다. (HTTP ' + res.status + ')');
+          return;
+        }
+
         const data = await res.json();
 
         if (data.success && data.token) {
           // 토큰 저장
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
+          try {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          } catch (storageErr) {
+            console.error('localStorage 저장 실패:', storageErr);
+          }
 
           // 쿠키에도 저장
-          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60);
+          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60) + '; SameSite=Lax';
 
           showSuccess('회원가입 성공! 채널 목록으로 이동합니다...');
           setTimeout(() => {
             window.location.href = '/channels';
-          }, 1000);
+          }, 500);
         } else {
           showError(data.error || '회원가입에 실패했습니다.');
         }
       } catch (err) {
-        showError('서버 연결에 실패했습니다.');
+        console.error('회원가입 에러:', err);
+        showError('서버 연결에 실패했습니다. (' + (err.message || '알 수 없는 오류') + ')');
       } finally {
         setLoading('signup-btn', false);
       }

@@ -31,6 +31,8 @@ import { renderLogin } from './views/login'
 import { renderChannelList } from './views/channels'
 import { renderSettings } from './views/settings'
 import { renderLanding } from './views/landing'
+import { renderPrivacy } from './views/privacy'
+import { renderTerms } from './views/terms'
 
 // Handlers (스케줄러는 별도 Cron Worker에서 API 호출)
 
@@ -74,7 +76,8 @@ app.get('/', async (c) => {
       }
     }
   }
-  return c.html(renderLanding())
+  const baseUrl = c.env.BASE_URL || 'https://autonomey.com'
+  return c.html(renderLanding(baseUrl))
 })
 
 // 로그인 페이지
@@ -85,6 +88,16 @@ app.get('/login', (c) => {
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+// 개인정보 처리방침
+app.get('/privacy', (c) => {
+  return c.html(renderPrivacy())
+})
+
+// 서비스 이용약관
+app.get('/terms', (c) => {
+  return c.html(renderTerms())
 })
 
 // 인증 라우트 (회원가입, 로그인, 토큰 갱신)

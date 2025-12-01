@@ -78,6 +78,10 @@ auth.post('/signup', async (c) => {
       c.env.JWT_SECRET
     )
 
+    // 서버 사이드에서 쿠키 설정 (더 안정적)
+    const maxAge = 7 * 24 * 60 * 60 // 7일
+    c.header('Set-Cookie', `token=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`)
+
     return c.json<AuthResponse>({
       success: true,
       token,
@@ -141,6 +145,10 @@ auth.post('/login', async (c) => {
       { userId: user.id, email: user.email, role: user.role },
       c.env.JWT_SECRET
     )
+
+    // 서버 사이드에서 쿠키 설정 (더 안정적)
+    const maxAge = 7 * 24 * 60 * 60 // 7일
+    c.header('Set-Cookie', `token=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`)
 
     return c.json<AuthResponse>({
       success: true,

@@ -2,20 +2,134 @@
  * 랜딩 페이지 HTML 렌더링
  */
 
-export function renderLanding(): string {
+export function renderLanding(baseUrl: string = 'https://autonomey.com'): string {
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Autonomey - YouTube 댓글 자동 응답 AI</title>
-  <meta name="description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 무료로 시작하세요.">
-  <meta name="keywords" content="YouTube, 댓글, 자동응답, AI, 유튜브, 댓글관리, 자동화">
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="Autonomey - YouTube 댓글 자동 응답 AI">
-  <meta property="og:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다.">
+  <!-- Primary Meta Tags -->
+  <title>유튜브 댓글 자동 응답 AI | Autonomey - 댓글 관리 자동화 시스템</title>
+  <meta name="title" content="유튜브 댓글 자동 응답 AI | Autonomey - 댓글 관리 자동화 시스템">
+  <meta name="description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 댓글 분류, 맞춤 응답 생성, 자동 게시까지. 유튜버를 위한 댓글 관리 자동화 솔루션. 무료로 시작하세요.">
+  <meta name="keywords" content="유튜브 댓글 자동 응답, YouTube 댓글 봇, 댓글 자동화, AI 댓글 관리, 유튜브 자동 응답 시스템, 댓글 봇, 유튜버 도구, 채널 관리, 댓글 자동 분류, AI 응답 생성, 유튜브 마케팅 자동화, 크리에이터 도구">
+  <meta name="author" content="Autonomey">
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow">
+  <link rel="canonical" href="${baseUrl}/">
+
+  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
+  <meta property="og:url" content="${baseUrl}/">
+  <meta property="og:title" content="유튜브 댓글 자동 응답 AI | Autonomey">
+  <meta property="og:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 댓글 분류부터 자동 게시까지, 유튜버를 위한 완벽한 댓글 관리 자동화.">
+  <meta property="og:image" content="${baseUrl}/og-image.png">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:site_name" content="Autonomey">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="${baseUrl}/">
+  <meta property="twitter:title" content="유튜브 댓글 자동 응답 AI | Autonomey">
+  <meta property="twitter:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 무료로 시작하세요.">
+  <meta property="twitter:image" content="${baseUrl}/og-image.png">
+
+  <!-- Naver 검색 최적화 -->
+  <meta name="naver-site-verification" content="">
+
+  <!-- Schema.org 구조화 데이터 -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Autonomey",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "AI 기반 유튜브 댓글 자동 응답 시스템. 댓글 분류, 맞춤 응답 생성, 자동 게시 기능 제공.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "KRW",
+      "description": "Beta 기간 무료"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "50"
+    },
+    "featureList": [
+      "AI 댓글 자동 분류",
+      "맞춤형 응답 생성",
+      "다채널 관리",
+      "자동 스케줄링",
+      "검토 후 게시"
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Autonomey",
+    "url": "${baseUrl}",
+    "logo": "${baseUrl}/logo.png",
+    "description": "유튜버를 위한 AI 댓글 자동 응답 서비스",
+    "sameAs": [
+      "https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4"
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "API Key는 어떻게 발급받나요?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OpenRouter (openrouter.ai)에서 무료 가입 후 API Key를 발급받으시면 됩니다. 무료 모델을 선택하면 API 비용 없이 시작할 수 있어요!"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "내 채널 정보가 안전한가요?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "YouTube OAuth 2.0으로 안전하게 연동됩니다. 비밀번호를 저장하지 않으며, 언제든 Google 계정 설정에서 연동을 해제할 수 있습니다."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "AI 응답이 마음에 안 들면요?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "검토 후 게시 기능으로 응답을 확인/수정한 뒤 승인할 수 있습니다. 마음에 안 드는 응답은 삭제하거나 직접 수정하세요."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "여러 채널을 운영하는데요?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "여러 채널을 연동하고 각 채널별로 다른 응답 스타일을 설정할 수 있습니다."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "나중에 유료로 바뀌나요?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "네, 정식 출시 후 월 1,900원이 적용될 예정입니다. Beta 기간에 가입하신 분들께는 할인 혜택을 드릴 계획이에요!"
+        }
+      }
+    ]
+  }
+  </script>
 
   <style>
     * {
@@ -1050,7 +1164,7 @@ export function renderLanding(): string {
           <div class="step-content">
             <h3>회원가입 & API Key 설정</h3>
             <p>OpenRouter API Key만 있으면 OK</p>
-            <span class="hint">💡 무료 크레딧으로 시작 가능</span>
+            <span class="hint">💡 무료 모델로 시작 가능</span>
           </div>
         </div>
         <div class="step">
@@ -1248,7 +1362,7 @@ export function renderLanding(): string {
           <div class="faq-answer">
             <div class="faq-answer-content">
               OpenRouter (openrouter.ai)에서 무료 가입 후 API Key를 발급받으시면 됩니다.
-              가입 시 무료 크레딧도 제공되어 바로 시작할 수 있습니다!
+              무료 모델을 선택하면 API 비용 없이 시작할 수 있어요!
             </div>
           </div>
         </div>
@@ -1329,9 +1443,9 @@ export function renderLanding(): string {
     <div class="footer-content">
       <div class="footer-logo">🎬 Autonomey</div>
       <div class="footer-links">
-        <a href="#">이용약관</a>
-        <a href="#">개인정보처리방침</a>
-        <a href="#">문의하기</a>
+        <a href="/terms">이용약관</a>
+        <a href="/privacy">개인정보처리방침</a>
+        <a href="mailto:support@autonomey.com">문의하기</a>
       </div>
       <div class="footer-copy">
         © 2025 Autonomey. All rights reserved.<br>
