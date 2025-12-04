@@ -12,7 +12,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
   <!-- Primary Meta Tags -->
   <title>유튜브 댓글 자동 응답 AI | Autonomey - 댓글 관리 자동화 시스템</title>
   <meta name="title" content="유튜브 댓글 자동 응답 AI | Autonomey - 댓글 관리 자동화 시스템">
-  <meta name="description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 댓글 분류, 맞춤 응답 생성, 자동 게시까지. 유튜버를 위한 댓글 관리 자동화 솔루션. 무료로 시작하세요.">
+  <meta name="description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 유튜브 콘텐츠 제작용 프로젝트입니다. 무료로 사용하세요.">
   <meta name="keywords" content="유튜브 댓글 자동 응답, YouTube 댓글 봇, 댓글 자동화, AI 댓글 관리, 유튜브 자동 응답 시스템, 댓글 봇, 유튜버 도구, 채널 관리, 댓글 자동 분류, AI 응답 생성, 유튜브 마케팅 자동화, 크리에이터 도구">
   <meta name="author" content="Autonomey">
   <meta name="robots" content="index, follow">
@@ -23,7 +23,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
   <meta property="og:type" content="website">
   <meta property="og:url" content="${baseUrl}/">
   <meta property="og:title" content="유튜브 댓글 자동 응답 AI | Autonomey">
-  <meta property="og:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 댓글 분류부터 자동 게시까지, 유튜버를 위한 완벽한 댓글 관리 자동화.">
+  <meta property="og:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 유튜브 콘텐츠 제작용 프로젝트입니다.">
   <meta property="og:image" content="${baseUrl}/og-image.png">
   <meta property="og:locale" content="ko_KR">
   <meta property="og:site_name" content="Autonomey">
@@ -32,7 +32,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="${baseUrl}/">
   <meta property="twitter:title" content="유튜브 댓글 자동 응답 AI | Autonomey">
-  <meta property="twitter:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 무료로 시작하세요.">
+  <meta property="twitter:description" content="AI가 당신의 채널 톤에 맞춰 YouTube 댓글에 자동으로 응답합니다. 유튜브 콘텐츠 제작용 프로젝트입니다.">
   <meta property="twitter:image" content="${baseUrl}/og-image.png">
 
   <!-- Naver 검색 최적화 -->
@@ -51,7 +51,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "KRW",
-      "description": "Beta 기간 무료"
+      "description": "유튜브 콘텐츠용 무료 프로젝트"
     },
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -121,10 +121,10 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
       },
       {
         "@type": "Question",
-        "name": "나중에 유료로 바뀌나요?",
+        "name": "비용이 발생하나요?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "네, 정식 출시 후 월 1,900원이 적용될 예정입니다. Beta 기간에 가입하신 분들께는 할인 혜택을 드릴 계획이에요!"
+          "text": "서비스 자체는 무료입니다. 다만 AI 응답 생성을 위해 OpenRouter API를 사용하며, API 사용량에 따라 비용이 발생합니다. 댓글 1,000개 처리 시 약 $0.5 수준입니다."
         }
       }
     ]
@@ -1045,7 +1045,6 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
       </a>
       <div class="nav-links">
         <a href="#features">기능</a>
-        <a href="#pricing">요금</a>
         <a href="#faq">FAQ</a>
       </div>
       <div class="nav-cta">
@@ -1059,7 +1058,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
   <section class="hero">
     <div class="container">
       <div class="hero-content">
-        <div class="hero-badge">🚀 Beta - 무료로 사용해보세요</div>
+        <div class="hero-badge">🎬 유튜브 콘텐츠 제작용 프로젝트</div>
         <h1>
           댓글 하나하나 답하느라<br>
           <span>영상 만들 시간이 없으신가요?</span>
@@ -1073,8 +1072,8 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
           <a href="#demo" class="btn btn-ghost btn-large">데모 보기</a>
         </div>
         <div class="hero-features">
-          <span><span class="check">✓</span> Beta 기간 무료</span>
-          <span><span class="check">✓</span> 신용카드 불필요</span>
+          <span><span class="check">✓</span> 서비스 무료</span>
+          <span><span class="check">✓</span> API 비용만 별도</span>
           <span><span class="check">✓</span> 5분 안에 설정 완료</span>
         </div>
       </div>
@@ -1302,19 +1301,19 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
     </div>
   </section>
 
-  <!-- Pricing Section -->
-  <section class="pricing" id="pricing">
+  <!-- API 비용 안내 Section -->
+  <section class="pricing" id="api-cost">
     <div class="container">
       <div class="section-title">
-        <h2>💰 심플한 요금제</h2>
-        <p>Beta 기간 무료, 정식 출시 후 월 1,900원</p>
+        <h2>💡 비용 안내</h2>
+        <p>서비스는 무료, API 연동 비용만 본인 부담</p>
       </div>
-      <div class="pricing-cards">
+      <div class="pricing-cards" style="max-width: 500px;">
         <div class="pricing-card featured">
-          <div class="plan-icon">🎉</div>
-          <h3>Beta (현재)</h3>
-          <div class="price">₩0<span>/월</span></div>
-          <div class="note">Beta 기간 한정 무료</div>
+          <div class="plan-icon">🎬</div>
+          <h3>유튜브 콘텐츠용</h3>
+          <div class="price">무료</div>
+          <div class="note">유튜브 콘텐츠 제작용 프로젝트</div>
           <ul>
             <li><span class="check">✓</span> 무제한 채널 연동</li>
             <li><span class="check">✓</span> 무제한 댓글 처리</li>
@@ -1325,24 +1324,10 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
           </ul>
           <a href="/login" class="btn btn-primary">무료로 시작</a>
         </div>
-        <div class="pricing-card">
-          <div class="plan-icon">🚀</div>
-          <h3>정식 버전</h3>
-          <div class="price">₩1,900<span>/월</span></div>
-          <div class="note">정식 출시 후 적용 예정</div>
-          <ul>
-            <li><span class="check">✓</span> Beta 전체 기능</li>
-            <li><span class="check">✓</span> 자동 스케줄링</li>
-            <li><span class="check">✓</span> 분석 대시보드</li>
-            <li><span class="check">✓</span> 우선 기술 지원</li>
-            <li><span class="check">✓</span> 신규 기능 우선 제공</li>
-            <li><span class="check">✓</span> Beta 유저 할인 혜택</li>
-          </ul>
-          <button class="btn btn-ghost" disabled>출시 알림받기</button>
-        </div>
       </div>
       <div class="pricing-hint">
-        <p>💡 AI 비용은 본인의 OpenRouter API Key로 직접 관리 (댓글 1,000개 처리 시 약 $0.5)</p>
+        <p>⚠️ AI 응답 생성 시 OpenRouter API 비용이 발생합니다<br>
+        (댓글 1,000개 처리 시 약 $0.5 수준)</p>
       </div>
     </div>
   </section>
@@ -1403,13 +1388,14 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
         </div>
         <div class="faq-item">
           <div class="faq-question">
-            나중에 유료로 바뀌나요?
+            비용이 발생하나요?
             <span class="faq-toggle">▼</span>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
-              네, 정식 출시 후 월 1,900원이 적용될 예정입니다.
-              Beta 기간에 가입하신 분들께는 할인 혜택을 드릴 계획이에요!
+              서비스 자체는 무료입니다! 유튜브 콘텐츠 제작용으로 만든 프로젝트예요.
+              다만 AI 응답 생성을 위해 OpenRouter API를 사용하는데, API 사용량에 따라 비용이 발생합니다.
+              댓글 1,000개 처리 시 약 $0.5 수준이에요.
             </div>
           </div>
         </div>
@@ -1434,6 +1420,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
     <div class="container">
       <h2>🚀 지금 바로 시작하세요</h2>
       <p>댓글 관리에 쓰던 시간,<br>이제 더 좋은 영상 만드는 데 쓰세요.</p>
+      <p style="font-size: 14px; color: #666; margin-bottom: 24px;">유튜브 콘텐츠 제작용 프로젝트입니다</p>
       <a href="/login" class="btn btn-primary btn-large">무료로 시작하기</a>
     </div>
   </section>
@@ -1445,7 +1432,7 @@ export function renderLanding(baseUrl: string = 'https://autonomey.com'): string
       <div class="footer-links">
         <a href="/terms">이용약관</a>
         <a href="/privacy">개인정보처리방침</a>
-        <a href="mailto:support@autonomey.com">문의하기</a>
+        <a href="mailto:autonomey.ai@gmail.com">문의하기</a>
       </div>
       <div class="footer-copy">
         © 2025 Autonomey. All rights reserved.<br>

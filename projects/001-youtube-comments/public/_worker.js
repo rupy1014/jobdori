@@ -1,2626 +1,8 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-
-// src/services/youtube-channel.ts
-var youtube_channel_exports = {};
-__export(youtube_channel_exports, {
-  exchangeCodeForChannel: () => exchangeCodeForChannel,
-  fetchChannelComments: () => fetchChannelComments,
-  postReplyWithChannel: () => postReplyWithChannel,
-  refreshChannelToken: () => refreshChannelToken
-});
-async function refreshChannelToken(env, refreshToken) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      client_id: env.YOUTUBE_CLIENT_ID,
-      client_secret: env.YOUTUBE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token"
-    })
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to refresh token: ${errorText}`);
-  }
-  const data = await response.json();
-  return {
-    accessToken: data.access_token,
-    expiresAt: new Date(Date.now() + data.expires_in * 1e3).toISOString()
-  };
-}
-async function exchangeCodeForChannel(env, code, redirectUri) {
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      client_id: env.YOUTUBE_CLIENT_ID,
-      client_secret: env.YOUTUBE_CLIENT_SECRET,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri
-    })
-  });
-  if (!tokenResponse.ok) {
-    const errorText = await tokenResponse.text();
-    throw new Error(`Failed to exchange code: ${errorText}`);
-  }
-  const tokenData = await tokenResponse.json();
-  const channelResponse = await fetch(
-    `${YOUTUBE_API_BASE2}/channels?part=snippet&mine=true`,
-    {
-      headers: {
-        "Authorization": `Bearer ${tokenData.access_token}`
-      }
-    }
-  );
-  if (!channelResponse.ok) {
-    throw new Error("Failed to get channel info");
-  }
-  const channelData = await channelResponse.json();
-  const channel = channelData.items?.[0];
-  if (!channel) {
-    throw new Error("No channel found for this account");
-  }
-  return {
-    accessToken: tokenData.access_token,
-    refreshToken: tokenData.refresh_token,
-    expiresAt: new Date(Date.now() + tokenData.expires_in * 1e3).toISOString(),
-    channelId: channel.id,
-    channelTitle: channel.snippet.title
-  };
-}
-async function getChannelVideoIds2(env, channel) {
-  const videoIds = [];
-  const channelResponse = await fetch(
-    `${YOUTUBE_API_BASE2}/channels?part=contentDetails&id=${channel.youtube.channelId}&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!channelResponse.ok) {
-    throw new Error(`Failed to get channel: ${channelResponse.statusText}`);
-  }
-  const channelData = await channelResponse.json();
-  const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-  if (!uploadsPlaylistId) {
-    throw new Error("Could not find uploads playlist");
-  }
-  const playlistResponse = await fetch(
-    `${YOUTUBE_API_BASE2}/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=50&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!playlistResponse.ok) {
-    throw new Error(`Failed to get playlist items: ${playlistResponse.statusText}`);
-  }
-  const playlistData = await playlistResponse.json();
-  for (const item of playlistData.items || []) {
-    videoIds.push(item.contentDetails.videoId);
-  }
-  return videoIds;
-}
-async function getVideoInfo2(env, videoId) {
-  const response = await fetch(
-    `${YOUTUBE_API_BASE2}/videos?part=snippet&id=${videoId}&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to get video info: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return {
-    title: data.items?.[0]?.snippet?.title || "Unknown"
-  };
-}
-async function getVideoComments2(env, videoId) {
-  const response = await fetch(
-    `${YOUTUBE_API_BASE2}/commentThreads?part=snippet,replies&videoId=${videoId}&maxResults=100&order=time&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!response.ok) {
-    if (response.status === 403) {
-      console.log(`Comments disabled for video ${videoId}`);
-      return [];
-    }
-    throw new Error(`Failed to get comments: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.items || [];
-}
-function checkMyReplyInThread(thread, myChannelId) {
-  if (thread.replies?.comments) {
-    const myReply = thread.replies.comments.find(
-      (reply) => reply.snippet.authorChannelId.value === myChannelId
-    );
-    if (myReply) {
-      return { hasReply: true, replyText: myReply.snippet.textDisplay };
-    }
-  }
-  return { hasReply: false };
-}
-async function fetchChannelComments(env, channel) {
-  const comments = [];
-  const videoIds = await getChannelVideoIds2(env, channel);
-  for (const videoId of videoIds) {
-    const videoInfo = await getVideoInfo2(env, videoId);
-    const threads = await getVideoComments2(env, videoId);
-    for (const thread of threads) {
-      const commentData = thread.snippet.topLevelComment.snippet;
-      const commentId = thread.snippet.topLevelComment.id;
-      if (commentData.authorChannelId.value === channel.youtube.channelId) {
-        continue;
-      }
-      const { hasReply, replyText } = checkMyReplyInThread(thread, channel.youtube.channelId);
-      comments.push({
-        id: commentId,
-        videoId,
-        videoTitle: videoInfo.title,
-        authorName: commentData.authorDisplayName,
-        authorChannelId: commentData.authorChannelId.value,
-        text: commentData.textDisplay,
-        publishedAt: commentData.publishedAt,
-        status: hasReply ? "replied" : "unclassified",
-        replyText: hasReply ? replyText : void 0
-      });
-    }
-  }
-  return comments;
-}
-async function postReplyWithChannel(env, channel, parentId, text) {
-  const response = await fetch(`${YOUTUBE_API_BASE2}/comments?part=snippet`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${channel.youtube.accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      snippet: {
-        parentId,
-        textOriginal: text
-      }
-    })
-  });
-  if (!response.ok) {
-    const errorData = await response.text();
-    throw new Error(`Failed to post reply: ${response.statusText} - ${errorData}`);
-  }
-}
-var YOUTUBE_API_BASE2;
-var init_youtube_channel = __esm({
-  "src/services/youtube-channel.ts"() {
-    "use strict";
-    YOUTUBE_API_BASE2 = "https://www.googleapis.com/youtube/v3";
-  }
-});
-
-// node_modules/hono/dist/compose.js
-var compose = (middleware, onError, onNotFound) => {
-  return (context, next) => {
-    let index = -1;
-    return dispatch(0);
-    async function dispatch(i) {
-      if (i <= index) {
-        throw new Error("next() called multiple times");
-      }
-      index = i;
-      let res;
-      let isError = false;
-      let handler;
-      if (middleware[i]) {
-        handler = middleware[i][0][0];
-        context.req.routeIndex = i;
-      } else {
-        handler = i === middleware.length && next || void 0;
-      }
-      if (handler) {
-        try {
-          res = await handler(context, () => dispatch(i + 1));
-        } catch (err) {
-          if (err instanceof Error && onError) {
-            context.error = err;
-            res = await onError(err, context);
-            isError = true;
-          } else {
-            throw err;
-          }
-        }
-      } else {
-        if (context.finalized === false && onNotFound) {
-          res = await onNotFound(context);
-        }
-      }
-      if (res && (context.finalized === false || isError)) {
-        context.res = res;
-      }
-      return context;
-    }
-  };
-};
-
-// node_modules/hono/dist/http-exception.js
-var HTTPException = class extends Error {
-  res;
-  status;
-  constructor(status = 500, options) {
-    super(options?.message, { cause: options?.cause });
-    this.res = options?.res;
-    this.status = status;
-  }
-  getResponse() {
-    if (this.res) {
-      const newResponse = new Response(this.res.body, {
-        status: this.status,
-        headers: this.res.headers
-      });
-      return newResponse;
-    }
-    return new Response(this.message, {
-      status: this.status
-    });
-  }
-};
-
-// node_modules/hono/dist/request/constants.js
-var GET_MATCH_RESULT = Symbol();
-
-// node_modules/hono/dist/utils/body.js
-var parseBody = async (request, options = /* @__PURE__ */ Object.create(null)) => {
-  const { all = false, dot = false } = options;
-  const headers = request instanceof HonoRequest ? request.raw.headers : request.headers;
-  const contentType = headers.get("Content-Type");
-  if (contentType?.startsWith("multipart/form-data") || contentType?.startsWith("application/x-www-form-urlencoded")) {
-    return parseFormData(request, { all, dot });
-  }
-  return {};
-};
-async function parseFormData(request, options) {
-  const formData = await request.formData();
-  if (formData) {
-    return convertFormDataToBodyData(formData, options);
-  }
-  return {};
-}
-function convertFormDataToBodyData(formData, options) {
-  const form = /* @__PURE__ */ Object.create(null);
-  formData.forEach((value, key) => {
-    const shouldParseAllValues = options.all || key.endsWith("[]");
-    if (!shouldParseAllValues) {
-      form[key] = value;
-    } else {
-      handleParsingAllValues(form, key, value);
-    }
-  });
-  if (options.dot) {
-    Object.entries(form).forEach(([key, value]) => {
-      const shouldParseDotValues = key.includes(".");
-      if (shouldParseDotValues) {
-        handleParsingNestedValues(form, key, value);
-        delete form[key];
-      }
-    });
-  }
-  return form;
-}
-var handleParsingAllValues = (form, key, value) => {
-  if (form[key] !== void 0) {
-    if (Array.isArray(form[key])) {
-      ;
-      form[key].push(value);
-    } else {
-      form[key] = [form[key], value];
-    }
-  } else {
-    if (!key.endsWith("[]")) {
-      form[key] = value;
-    } else {
-      form[key] = [value];
-    }
-  }
-};
-var handleParsingNestedValues = (form, key, value) => {
-  let nestedForm = form;
-  const keys = key.split(".");
-  keys.forEach((key2, index) => {
-    if (index === keys.length - 1) {
-      nestedForm[key2] = value;
-    } else {
-      if (!nestedForm[key2] || typeof nestedForm[key2] !== "object" || Array.isArray(nestedForm[key2]) || nestedForm[key2] instanceof File) {
-        nestedForm[key2] = /* @__PURE__ */ Object.create(null);
-      }
-      nestedForm = nestedForm[key2];
-    }
-  });
-};
-
-// node_modules/hono/dist/utils/url.js
-var splitPath = (path) => {
-  const paths = path.split("/");
-  if (paths[0] === "") {
-    paths.shift();
-  }
-  return paths;
-};
-var splitRoutingPath = (routePath) => {
-  const { groups, path } = extractGroupsFromPath(routePath);
-  const paths = splitPath(path);
-  return replaceGroupMarks(paths, groups);
-};
-var extractGroupsFromPath = (path) => {
-  const groups = [];
-  path = path.replace(/\{[^}]+\}/g, (match2, index) => {
-    const mark = `@${index}`;
-    groups.push([mark, match2]);
-    return mark;
-  });
-  return { groups, path };
-};
-var replaceGroupMarks = (paths, groups) => {
-  for (let i = groups.length - 1; i >= 0; i--) {
-    const [mark] = groups[i];
-    for (let j = paths.length - 1; j >= 0; j--) {
-      if (paths[j].includes(mark)) {
-        paths[j] = paths[j].replace(mark, groups[i][1]);
-        break;
-      }
-    }
-  }
-  return paths;
-};
-var patternCache = {};
-var getPattern = (label, next) => {
-  if (label === "*") {
-    return "*";
-  }
-  const match2 = label.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
-  if (match2) {
-    const cacheKey = `${label}#${next}`;
-    if (!patternCache[cacheKey]) {
-      if (match2[2]) {
-        patternCache[cacheKey] = next && next[0] !== ":" && next[0] !== "*" ? [cacheKey, match2[1], new RegExp(`^${match2[2]}(?=/${next})`)] : [label, match2[1], new RegExp(`^${match2[2]}$`)];
-      } else {
-        patternCache[cacheKey] = [label, match2[1], true];
-      }
-    }
-    return patternCache[cacheKey];
-  }
-  return null;
-};
-var tryDecode = (str, decoder) => {
-  try {
-    return decoder(str);
-  } catch {
-    return str.replace(/(?:%[0-9A-Fa-f]{2})+/g, (match2) => {
-      try {
-        return decoder(match2);
-      } catch {
-        return match2;
-      }
-    });
-  }
-};
-var tryDecodeURI = (str) => tryDecode(str, decodeURI);
-var getPath = (request) => {
-  const url = request.url;
-  const start = url.indexOf("/", url.indexOf(":") + 4);
-  let i = start;
-  for (; i < url.length; i++) {
-    const charCode = url.charCodeAt(i);
-    if (charCode === 37) {
-      const queryIndex = url.indexOf("?", i);
-      const path = url.slice(start, queryIndex === -1 ? void 0 : queryIndex);
-      return tryDecodeURI(path.includes("%25") ? path.replace(/%25/g, "%2525") : path);
-    } else if (charCode === 63) {
-      break;
-    }
-  }
-  return url.slice(start, i);
-};
-var getPathNoStrict = (request) => {
-  const result = getPath(request);
-  return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
-};
-var mergePath = (base, sub, ...rest) => {
-  if (rest.length) {
-    sub = mergePath(sub, ...rest);
-  }
-  return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
-};
-var checkOptionalParameter = (path) => {
-  if (path.charCodeAt(path.length - 1) !== 63 || !path.includes(":")) {
-    return null;
-  }
-  const segments = path.split("/");
-  const results = [];
-  let basePath = "";
-  segments.forEach((segment) => {
-    if (segment !== "" && !/\:/.test(segment)) {
-      basePath += "/" + segment;
-    } else if (/\:/.test(segment)) {
-      if (/\?/.test(segment)) {
-        if (results.length === 0 && basePath === "") {
-          results.push("/");
-        } else {
-          results.push(basePath);
-        }
-        const optionalSegment = segment.replace("?", "");
-        basePath += "/" + optionalSegment;
-        results.push(basePath);
-      } else {
-        basePath += "/" + segment;
-      }
-    }
-  });
-  return results.filter((v, i, a) => a.indexOf(v) === i);
-};
-var _decodeURI = (value) => {
-  if (!/[%+]/.test(value)) {
-    return value;
-  }
-  if (value.indexOf("+") !== -1) {
-    value = value.replace(/\+/g, " ");
-  }
-  return value.indexOf("%") !== -1 ? tryDecode(value, decodeURIComponent_) : value;
-};
-var _getQueryParam = (url, key, multiple) => {
-  let encoded;
-  if (!multiple && key && !/[%+]/.test(key)) {
-    let keyIndex2 = url.indexOf("?", 8);
-    if (keyIndex2 === -1) {
-      return void 0;
-    }
-    if (!url.startsWith(key, keyIndex2 + 1)) {
-      keyIndex2 = url.indexOf(`&${key}`, keyIndex2 + 1);
-    }
-    while (keyIndex2 !== -1) {
-      const trailingKeyCode = url.charCodeAt(keyIndex2 + key.length + 1);
-      if (trailingKeyCode === 61) {
-        const valueIndex = keyIndex2 + key.length + 2;
-        const endIndex = url.indexOf("&", valueIndex);
-        return _decodeURI(url.slice(valueIndex, endIndex === -1 ? void 0 : endIndex));
-      } else if (trailingKeyCode == 38 || isNaN(trailingKeyCode)) {
-        return "";
-      }
-      keyIndex2 = url.indexOf(`&${key}`, keyIndex2 + 1);
-    }
-    encoded = /[%+]/.test(url);
-    if (!encoded) {
-      return void 0;
-    }
-  }
-  const results = {};
-  encoded ??= /[%+]/.test(url);
-  let keyIndex = url.indexOf("?", 8);
-  while (keyIndex !== -1) {
-    const nextKeyIndex = url.indexOf("&", keyIndex + 1);
-    let valueIndex = url.indexOf("=", keyIndex);
-    if (valueIndex > nextKeyIndex && nextKeyIndex !== -1) {
-      valueIndex = -1;
-    }
-    let name = url.slice(
-      keyIndex + 1,
-      valueIndex === -1 ? nextKeyIndex === -1 ? void 0 : nextKeyIndex : valueIndex
-    );
-    if (encoded) {
-      name = _decodeURI(name);
-    }
-    keyIndex = nextKeyIndex;
-    if (name === "") {
-      continue;
-    }
-    let value;
-    if (valueIndex === -1) {
-      value = "";
-    } else {
-      value = url.slice(valueIndex + 1, nextKeyIndex === -1 ? void 0 : nextKeyIndex);
-      if (encoded) {
-        value = _decodeURI(value);
-      }
-    }
-    if (multiple) {
-      if (!(results[name] && Array.isArray(results[name]))) {
-        results[name] = [];
-      }
-      ;
-      results[name].push(value);
-    } else {
-      results[name] ??= value;
-    }
-  }
-  return key ? results[key] : results;
-};
-var getQueryParam = _getQueryParam;
-var getQueryParams = (url, key) => {
-  return _getQueryParam(url, key, true);
-};
-var decodeURIComponent_ = decodeURIComponent;
-
-// node_modules/hono/dist/request.js
-var tryDecodeURIComponent = (str) => tryDecode(str, decodeURIComponent_);
-var HonoRequest = class {
-  raw;
-  #validatedData;
-  #matchResult;
-  routeIndex = 0;
-  path;
-  bodyCache = {};
-  constructor(request, path = "/", matchResult = [[]]) {
-    this.raw = request;
-    this.path = path;
-    this.#matchResult = matchResult;
-    this.#validatedData = {};
-  }
-  param(key) {
-    return key ? this.#getDecodedParam(key) : this.#getAllDecodedParams();
-  }
-  #getDecodedParam(key) {
-    const paramKey = this.#matchResult[0][this.routeIndex][1][key];
-    const param = this.#getParamValue(paramKey);
-    return param && /\%/.test(param) ? tryDecodeURIComponent(param) : param;
-  }
-  #getAllDecodedParams() {
-    const decoded = {};
-    const keys = Object.keys(this.#matchResult[0][this.routeIndex][1]);
-    for (const key of keys) {
-      const value = this.#getParamValue(this.#matchResult[0][this.routeIndex][1][key]);
-      if (value !== void 0) {
-        decoded[key] = /\%/.test(value) ? tryDecodeURIComponent(value) : value;
-      }
-    }
-    return decoded;
-  }
-  #getParamValue(paramKey) {
-    return this.#matchResult[1] ? this.#matchResult[1][paramKey] : paramKey;
-  }
-  query(key) {
-    return getQueryParam(this.url, key);
-  }
-  queries(key) {
-    return getQueryParams(this.url, key);
-  }
-  header(name) {
-    if (name) {
-      return this.raw.headers.get(name) ?? void 0;
-    }
-    const headerData = {};
-    this.raw.headers.forEach((value, key) => {
-      headerData[key] = value;
-    });
-    return headerData;
-  }
-  async parseBody(options) {
-    return this.bodyCache.parsedBody ??= await parseBody(this, options);
-  }
-  #cachedBody = (key) => {
-    const { bodyCache, raw: raw2 } = this;
-    const cachedBody = bodyCache[key];
-    if (cachedBody) {
-      return cachedBody;
-    }
-    const anyCachedKey = Object.keys(bodyCache)[0];
-    if (anyCachedKey) {
-      return bodyCache[anyCachedKey].then((body) => {
-        if (anyCachedKey === "json") {
-          body = JSON.stringify(body);
-        }
-        return new Response(body)[key]();
-      });
-    }
-    return bodyCache[key] = raw2[key]();
-  };
-  json() {
-    return this.#cachedBody("text").then((text) => JSON.parse(text));
-  }
-  text() {
-    return this.#cachedBody("text");
-  }
-  arrayBuffer() {
-    return this.#cachedBody("arrayBuffer");
-  }
-  blob() {
-    return this.#cachedBody("blob");
-  }
-  formData() {
-    return this.#cachedBody("formData");
-  }
-  addValidatedData(target, data) {
-    this.#validatedData[target] = data;
-  }
-  valid(target) {
-    return this.#validatedData[target];
-  }
-  get url() {
-    return this.raw.url;
-  }
-  get method() {
-    return this.raw.method;
-  }
-  get [GET_MATCH_RESULT]() {
-    return this.#matchResult;
-  }
-  get matchedRoutes() {
-    return this.#matchResult[0].map(([[, route]]) => route);
-  }
-  get routePath() {
-    return this.#matchResult[0].map(([[, route]]) => route)[this.routeIndex].path;
-  }
-};
-
-// node_modules/hono/dist/utils/html.js
-var HtmlEscapedCallbackPhase = {
-  Stringify: 1,
-  BeforeStream: 2,
-  Stream: 3
-};
-var raw = (value, callbacks) => {
-  const escapedString = new String(value);
-  escapedString.isEscaped = true;
-  escapedString.callbacks = callbacks;
-  return escapedString;
-};
-var resolveCallback = async (str, phase, preserveCallbacks, context, buffer) => {
-  if (typeof str === "object" && !(str instanceof String)) {
-    if (!(str instanceof Promise)) {
-      str = str.toString();
-    }
-    if (str instanceof Promise) {
-      str = await str;
-    }
-  }
-  const callbacks = str.callbacks;
-  if (!callbacks?.length) {
-    return Promise.resolve(str);
-  }
-  if (buffer) {
-    buffer[0] += str;
-  } else {
-    buffer = [str];
-  }
-  const resStr = Promise.all(callbacks.map((c) => c({ phase, buffer, context }))).then(
-    (res) => Promise.all(
-      res.filter(Boolean).map((str2) => resolveCallback(str2, phase, false, context, buffer))
-    ).then(() => buffer[0])
-  );
-  if (preserveCallbacks) {
-    return raw(await resStr, callbacks);
-  } else {
-    return resStr;
-  }
-};
-
-// node_modules/hono/dist/context.js
-var TEXT_PLAIN = "text/plain; charset=UTF-8";
-var setDefaultContentType = (contentType, headers) => {
-  return {
-    "Content-Type": contentType,
-    ...headers
-  };
-};
-var Context = class {
-  #rawRequest;
-  #req;
-  env = {};
-  #var;
-  finalized = false;
-  error;
-  #status;
-  #executionCtx;
-  #res;
-  #layout;
-  #renderer;
-  #notFoundHandler;
-  #preparedHeaders;
-  #matchResult;
-  #path;
-  constructor(req, options) {
-    this.#rawRequest = req;
-    if (options) {
-      this.#executionCtx = options.executionCtx;
-      this.env = options.env;
-      this.#notFoundHandler = options.notFoundHandler;
-      this.#path = options.path;
-      this.#matchResult = options.matchResult;
-    }
-  }
-  get req() {
-    this.#req ??= new HonoRequest(this.#rawRequest, this.#path, this.#matchResult);
-    return this.#req;
-  }
-  get event() {
-    if (this.#executionCtx && "respondWith" in this.#executionCtx) {
-      return this.#executionCtx;
-    } else {
-      throw Error("This context has no FetchEvent");
-    }
-  }
-  get executionCtx() {
-    if (this.#executionCtx) {
-      return this.#executionCtx;
-    } else {
-      throw Error("This context has no ExecutionContext");
-    }
-  }
-  get res() {
-    return this.#res ||= new Response(null, {
-      headers: this.#preparedHeaders ??= new Headers()
-    });
-  }
-  set res(_res) {
-    if (this.#res && _res) {
-      _res = new Response(_res.body, _res);
-      for (const [k, v] of this.#res.headers.entries()) {
-        if (k === "content-type") {
-          continue;
-        }
-        if (k === "set-cookie") {
-          const cookies = this.#res.headers.getSetCookie();
-          _res.headers.delete("set-cookie");
-          for (const cookie of cookies) {
-            _res.headers.append("set-cookie", cookie);
-          }
-        } else {
-          _res.headers.set(k, v);
-        }
-      }
-    }
-    this.#res = _res;
-    this.finalized = true;
-  }
-  render = (...args) => {
-    this.#renderer ??= (content) => this.html(content);
-    return this.#renderer(...args);
-  };
-  setLayout = (layout) => this.#layout = layout;
-  getLayout = () => this.#layout;
-  setRenderer = (renderer) => {
-    this.#renderer = renderer;
-  };
-  header = (name, value, options) => {
-    if (this.finalized) {
-      this.#res = new Response(this.#res.body, this.#res);
-    }
-    const headers = this.#res ? this.#res.headers : this.#preparedHeaders ??= new Headers();
-    if (value === void 0) {
-      headers.delete(name);
-    } else if (options?.append) {
-      headers.append(name, value);
-    } else {
-      headers.set(name, value);
-    }
-  };
-  status = (status) => {
-    this.#status = status;
-  };
-  set = (key, value) => {
-    this.#var ??= /* @__PURE__ */ new Map();
-    this.#var.set(key, value);
-  };
-  get = (key) => {
-    return this.#var ? this.#var.get(key) : void 0;
-  };
-  get var() {
-    if (!this.#var) {
-      return {};
-    }
-    return Object.fromEntries(this.#var);
-  }
-  #newResponse(data, arg, headers) {
-    const responseHeaders = this.#res ? new Headers(this.#res.headers) : this.#preparedHeaders ?? new Headers();
-    if (typeof arg === "object" && "headers" in arg) {
-      const argHeaders = arg.headers instanceof Headers ? arg.headers : new Headers(arg.headers);
-      for (const [key, value] of argHeaders) {
-        if (key.toLowerCase() === "set-cookie") {
-          responseHeaders.append(key, value);
-        } else {
-          responseHeaders.set(key, value);
-        }
-      }
-    }
-    if (headers) {
-      for (const [k, v] of Object.entries(headers)) {
-        if (typeof v === "string") {
-          responseHeaders.set(k, v);
-        } else {
-          responseHeaders.delete(k);
-          for (const v2 of v) {
-            responseHeaders.append(k, v2);
-          }
-        }
-      }
-    }
-    const status = typeof arg === "number" ? arg : arg?.status ?? this.#status;
-    return new Response(data, { status, headers: responseHeaders });
-  }
-  newResponse = (...args) => this.#newResponse(...args);
-  body = (data, arg, headers) => this.#newResponse(data, arg, headers);
-  text = (text, arg, headers) => {
-    return !this.#preparedHeaders && !this.#status && !arg && !headers && !this.finalized ? new Response(text) : this.#newResponse(
-      text,
-      arg,
-      setDefaultContentType(TEXT_PLAIN, headers)
-    );
-  };
-  json = (object, arg, headers) => {
-    return this.#newResponse(
-      JSON.stringify(object),
-      arg,
-      setDefaultContentType("application/json", headers)
-    );
-  };
-  html = (html, arg, headers) => {
-    const res = (html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers));
-    return typeof html === "object" ? resolveCallback(html, HtmlEscapedCallbackPhase.Stringify, false, {}).then(res) : res(html);
-  };
-  redirect = (location, status) => {
-    const locationString = String(location);
-    this.header(
-      "Location",
-      !/[^\x00-\xFF]/.test(locationString) ? locationString : encodeURI(locationString)
-    );
-    return this.newResponse(null, status ?? 302);
-  };
-  notFound = () => {
-    this.#notFoundHandler ??= () => new Response();
-    return this.#notFoundHandler(this);
-  };
-};
-
-// node_modules/hono/dist/router.js
-var METHOD_NAME_ALL = "ALL";
-var METHOD_NAME_ALL_LOWERCASE = "all";
-var METHODS = ["get", "post", "put", "delete", "options", "patch"];
-var MESSAGE_MATCHER_IS_ALREADY_BUILT = "Can not add a route since the matcher is already built.";
-var UnsupportedPathError = class extends Error {
-};
-
-// node_modules/hono/dist/utils/constants.js
-var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
-
-// node_modules/hono/dist/hono-base.js
-var notFoundHandler = (c) => {
-  return c.text("404 Not Found", 404);
-};
-var errorHandler = (err, c) => {
-  if ("getResponse" in err) {
-    const res = err.getResponse();
-    return c.newResponse(res.body, res);
-  }
-  console.error(err);
-  return c.text("Internal Server Error", 500);
-};
-var Hono = class {
-  get;
-  post;
-  put;
-  delete;
-  options;
-  patch;
-  all;
-  on;
-  use;
-  router;
-  getPath;
-  _basePath = "/";
-  #path = "/";
-  routes = [];
-  constructor(options = {}) {
-    const allMethods = [...METHODS, METHOD_NAME_ALL_LOWERCASE];
-    allMethods.forEach((method) => {
-      this[method] = (args1, ...args) => {
-        if (typeof args1 === "string") {
-          this.#path = args1;
-        } else {
-          this.#addRoute(method, this.#path, args1);
-        }
-        args.forEach((handler) => {
-          this.#addRoute(method, this.#path, handler);
-        });
-        return this;
-      };
-    });
-    this.on = (method, path, ...handlers) => {
-      for (const p of [path].flat()) {
-        this.#path = p;
-        for (const m of [method].flat()) {
-          handlers.map((handler) => {
-            this.#addRoute(m.toUpperCase(), this.#path, handler);
-          });
-        }
-      }
-      return this;
-    };
-    this.use = (arg1, ...handlers) => {
-      if (typeof arg1 === "string") {
-        this.#path = arg1;
-      } else {
-        this.#path = "*";
-        handlers.unshift(arg1);
-      }
-      handlers.forEach((handler) => {
-        this.#addRoute(METHOD_NAME_ALL, this.#path, handler);
-      });
-      return this;
-    };
-    const { strict, ...optionsWithoutStrict } = options;
-    Object.assign(this, optionsWithoutStrict);
-    this.getPath = strict ?? true ? options.getPath ?? getPath : getPathNoStrict;
-  }
-  #clone() {
-    const clone = new Hono({
-      router: this.router,
-      getPath: this.getPath
-    });
-    clone.errorHandler = this.errorHandler;
-    clone.#notFoundHandler = this.#notFoundHandler;
-    clone.routes = this.routes;
-    return clone;
-  }
-  #notFoundHandler = notFoundHandler;
-  errorHandler = errorHandler;
-  route(path, app3) {
-    const subApp = this.basePath(path);
-    app3.routes.map((r) => {
-      let handler;
-      if (app3.errorHandler === errorHandler) {
-        handler = r.handler;
-      } else {
-        handler = async (c, next) => (await compose([], app3.errorHandler)(c, () => r.handler(c, next))).res;
-        handler[COMPOSED_HANDLER] = r.handler;
-      }
-      subApp.#addRoute(r.method, r.path, handler);
-    });
-    return this;
-  }
-  basePath(path) {
-    const subApp = this.#clone();
-    subApp._basePath = mergePath(this._basePath, path);
-    return subApp;
-  }
-  onError = (handler) => {
-    this.errorHandler = handler;
-    return this;
-  };
-  notFound = (handler) => {
-    this.#notFoundHandler = handler;
-    return this;
-  };
-  mount(path, applicationHandler, options) {
-    let replaceRequest;
-    let optionHandler;
-    if (options) {
-      if (typeof options === "function") {
-        optionHandler = options;
-      } else {
-        optionHandler = options.optionHandler;
-        if (options.replaceRequest === false) {
-          replaceRequest = (request) => request;
-        } else {
-          replaceRequest = options.replaceRequest;
-        }
-      }
-    }
-    const getOptions = optionHandler ? (c) => {
-      const options2 = optionHandler(c);
-      return Array.isArray(options2) ? options2 : [options2];
-    } : (c) => {
-      let executionContext = void 0;
-      try {
-        executionContext = c.executionCtx;
-      } catch {
-      }
-      return [c.env, executionContext];
-    };
-    replaceRequest ||= (() => {
-      const mergedPath = mergePath(this._basePath, path);
-      const pathPrefixLength = mergedPath === "/" ? 0 : mergedPath.length;
-      return (request) => {
-        const url = new URL(request.url);
-        url.pathname = url.pathname.slice(pathPrefixLength) || "/";
-        return new Request(url, request);
-      };
-    })();
-    const handler = async (c, next) => {
-      const res = await applicationHandler(replaceRequest(c.req.raw), ...getOptions(c));
-      if (res) {
-        return res;
-      }
-      await next();
-    };
-    this.#addRoute(METHOD_NAME_ALL, mergePath(path, "*"), handler);
-    return this;
-  }
-  #addRoute(method, path, handler) {
-    method = method.toUpperCase();
-    path = mergePath(this._basePath, path);
-    const r = { basePath: this._basePath, path, method, handler };
-    this.router.add(method, path, [handler, r]);
-    this.routes.push(r);
-  }
-  #handleError(err, c) {
-    if (err instanceof Error) {
-      return this.errorHandler(err, c);
-    }
-    throw err;
-  }
-  #dispatch(request, executionCtx, env, method) {
-    if (method === "HEAD") {
-      return (async () => new Response(null, await this.#dispatch(request, executionCtx, env, "GET")))();
-    }
-    const path = this.getPath(request, { env });
-    const matchResult = this.router.match(method, path);
-    const c = new Context(request, {
-      path,
-      matchResult,
-      env,
-      executionCtx,
-      notFoundHandler: this.#notFoundHandler
-    });
-    if (matchResult[0].length === 1) {
-      let res;
-      try {
-        res = matchResult[0][0][0][0](c, async () => {
-          c.res = await this.#notFoundHandler(c);
-        });
-      } catch (err) {
-        return this.#handleError(err, c);
-      }
-      return res instanceof Promise ? res.then(
-        (resolved) => resolved || (c.finalized ? c.res : this.#notFoundHandler(c))
-      ).catch((err) => this.#handleError(err, c)) : res ?? this.#notFoundHandler(c);
-    }
-    const composed = compose(matchResult[0], this.errorHandler, this.#notFoundHandler);
-    return (async () => {
-      try {
-        const context = await composed(c);
-        if (!context.finalized) {
-          throw new Error(
-            "Context is not finalized. Did you forget to return a Response object or `await next()`?"
-          );
-        }
-        return context.res;
-      } catch (err) {
-        return this.#handleError(err, c);
-      }
-    })();
-  }
-  fetch = (request, ...rest) => {
-    return this.#dispatch(request, rest[1], rest[0], request.method);
-  };
-  request = (input, requestInit, Env, executionCtx) => {
-    if (input instanceof Request) {
-      return this.fetch(requestInit ? new Request(input, requestInit) : input, Env, executionCtx);
-    }
-    input = input.toString();
-    return this.fetch(
-      new Request(
-        /^https?:\/\//.test(input) ? input : `http://localhost${mergePath("/", input)}`,
-        requestInit
-      ),
-      Env,
-      executionCtx
-    );
-  };
-  fire = () => {
-    addEventListener("fetch", (event) => {
-      event.respondWith(this.#dispatch(event.request, event, void 0, event.request.method));
-    });
-  };
-};
-
-// node_modules/hono/dist/router/reg-exp-router/matcher.js
-var emptyParam = [];
-function match(method, path) {
-  const matchers = this.buildAllMatchers();
-  const match2 = (method2, path2) => {
-    const matcher = matchers[method2] || matchers[METHOD_NAME_ALL];
-    const staticMatch = matcher[2][path2];
-    if (staticMatch) {
-      return staticMatch;
-    }
-    const match3 = path2.match(matcher[0]);
-    if (!match3) {
-      return [[], emptyParam];
-    }
-    const index = match3.indexOf("", 1);
-    return [matcher[1][index], match3];
-  };
-  this.match = match2;
-  return match2(method, path);
-}
-
-// node_modules/hono/dist/router/reg-exp-router/node.js
-var LABEL_REG_EXP_STR = "[^/]+";
-var ONLY_WILDCARD_REG_EXP_STR = ".*";
-var TAIL_WILDCARD_REG_EXP_STR = "(?:|/.*)";
-var PATH_ERROR = Symbol();
-var regExpMetaChars = new Set(".\\+*[^]$()");
-function compareKey(a, b) {
-  if (a.length === 1) {
-    return b.length === 1 ? a < b ? -1 : 1 : -1;
-  }
-  if (b.length === 1) {
-    return 1;
-  }
-  if (a === ONLY_WILDCARD_REG_EXP_STR || a === TAIL_WILDCARD_REG_EXP_STR) {
-    return 1;
-  } else if (b === ONLY_WILDCARD_REG_EXP_STR || b === TAIL_WILDCARD_REG_EXP_STR) {
-    return -1;
-  }
-  if (a === LABEL_REG_EXP_STR) {
-    return 1;
-  } else if (b === LABEL_REG_EXP_STR) {
-    return -1;
-  }
-  return a.length === b.length ? a < b ? -1 : 1 : b.length - a.length;
-}
-var Node = class {
-  #index;
-  #varIndex;
-  #children = /* @__PURE__ */ Object.create(null);
-  insert(tokens, index, paramMap, context, pathErrorCheckOnly) {
-    if (tokens.length === 0) {
-      if (this.#index !== void 0) {
-        throw PATH_ERROR;
-      }
-      if (pathErrorCheckOnly) {
-        return;
-      }
-      this.#index = index;
-      return;
-    }
-    const [token, ...restTokens] = tokens;
-    const pattern = token === "*" ? restTokens.length === 0 ? ["", "", ONLY_WILDCARD_REG_EXP_STR] : ["", "", LABEL_REG_EXP_STR] : token === "/*" ? ["", "", TAIL_WILDCARD_REG_EXP_STR] : token.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
-    let node;
-    if (pattern) {
-      const name = pattern[1];
-      let regexpStr = pattern[2] || LABEL_REG_EXP_STR;
-      if (name && pattern[2]) {
-        if (regexpStr === ".*") {
-          throw PATH_ERROR;
-        }
-        regexpStr = regexpStr.replace(/^\((?!\?:)(?=[^)]+\)$)/, "(?:");
-        if (/\((?!\?:)/.test(regexpStr)) {
-          throw PATH_ERROR;
-        }
-      }
-      node = this.#children[regexpStr];
-      if (!node) {
-        if (Object.keys(this.#children).some(
-          (k) => k !== ONLY_WILDCARD_REG_EXP_STR && k !== TAIL_WILDCARD_REG_EXP_STR
-        )) {
-          throw PATH_ERROR;
-        }
-        if (pathErrorCheckOnly) {
-          return;
-        }
-        node = this.#children[regexpStr] = new Node();
-        if (name !== "") {
-          node.#varIndex = context.varIndex++;
-        }
-      }
-      if (!pathErrorCheckOnly && name !== "") {
-        paramMap.push([name, node.#varIndex]);
-      }
-    } else {
-      node = this.#children[token];
-      if (!node) {
-        if (Object.keys(this.#children).some(
-          (k) => k.length > 1 && k !== ONLY_WILDCARD_REG_EXP_STR && k !== TAIL_WILDCARD_REG_EXP_STR
-        )) {
-          throw PATH_ERROR;
-        }
-        if (pathErrorCheckOnly) {
-          return;
-        }
-        node = this.#children[token] = new Node();
-      }
-    }
-    node.insert(restTokens, index, paramMap, context, pathErrorCheckOnly);
-  }
-  buildRegExpStr() {
-    const childKeys = Object.keys(this.#children).sort(compareKey);
-    const strList = childKeys.map((k) => {
-      const c = this.#children[k];
-      return (typeof c.#varIndex === "number" ? `(${k})@${c.#varIndex}` : regExpMetaChars.has(k) ? `\\${k}` : k) + c.buildRegExpStr();
-    });
-    if (typeof this.#index === "number") {
-      strList.unshift(`#${this.#index}`);
-    }
-    if (strList.length === 0) {
-      return "";
-    }
-    if (strList.length === 1) {
-      return strList[0];
-    }
-    return "(?:" + strList.join("|") + ")";
-  }
-};
-
-// node_modules/hono/dist/router/reg-exp-router/trie.js
-var Trie = class {
-  #context = { varIndex: 0 };
-  #root = new Node();
-  insert(path, index, pathErrorCheckOnly) {
-    const paramAssoc = [];
-    const groups = [];
-    for (let i = 0; ; ) {
-      let replaced = false;
-      path = path.replace(/\{[^}]+\}/g, (m) => {
-        const mark = `@\\${i}`;
-        groups[i] = [mark, m];
-        i++;
-        replaced = true;
-        return mark;
-      });
-      if (!replaced) {
-        break;
-      }
-    }
-    const tokens = path.match(/(?::[^\/]+)|(?:\/\*$)|./g) || [];
-    for (let i = groups.length - 1; i >= 0; i--) {
-      const [mark] = groups[i];
-      for (let j = tokens.length - 1; j >= 0; j--) {
-        if (tokens[j].indexOf(mark) !== -1) {
-          tokens[j] = tokens[j].replace(mark, groups[i][1]);
-          break;
-        }
-      }
-    }
-    this.#root.insert(tokens, index, paramAssoc, this.#context, pathErrorCheckOnly);
-    return paramAssoc;
-  }
-  buildRegExp() {
-    let regexp = this.#root.buildRegExpStr();
-    if (regexp === "") {
-      return [/^$/, [], []];
-    }
-    let captureIndex = 0;
-    const indexReplacementMap = [];
-    const paramReplacementMap = [];
-    regexp = regexp.replace(/#(\d+)|@(\d+)|\.\*\$/g, (_, handlerIndex, paramIndex) => {
-      if (handlerIndex !== void 0) {
-        indexReplacementMap[++captureIndex] = Number(handlerIndex);
-        return "$()";
-      }
-      if (paramIndex !== void 0) {
-        paramReplacementMap[Number(paramIndex)] = ++captureIndex;
-        return "";
-      }
-      return "";
-    });
-    return [new RegExp(`^${regexp}`), indexReplacementMap, paramReplacementMap];
-  }
-};
-
-// node_modules/hono/dist/router/reg-exp-router/router.js
-var nullMatcher = [/^$/, [], /* @__PURE__ */ Object.create(null)];
-var wildcardRegExpCache = /* @__PURE__ */ Object.create(null);
-function buildWildcardRegExp(path) {
-  return wildcardRegExpCache[path] ??= new RegExp(
-    path === "*" ? "" : `^${path.replace(
-      /\/\*$|([.\\+*[^\]$()])/g,
-      (_, metaChar) => metaChar ? `\\${metaChar}` : "(?:|/.*)"
-    )}$`
-  );
-}
-function clearWildcardRegExpCache() {
-  wildcardRegExpCache = /* @__PURE__ */ Object.create(null);
-}
-function buildMatcherFromPreprocessedRoutes(routes) {
-  const trie = new Trie();
-  const handlerData = [];
-  if (routes.length === 0) {
-    return nullMatcher;
-  }
-  const routesWithStaticPathFlag = routes.map(
-    (route) => [!/\*|\/:/.test(route[0]), ...route]
-  ).sort(
-    ([isStaticA, pathA], [isStaticB, pathB]) => isStaticA ? 1 : isStaticB ? -1 : pathA.length - pathB.length
-  );
-  const staticMap = /* @__PURE__ */ Object.create(null);
-  for (let i = 0, j = -1, len = routesWithStaticPathFlag.length; i < len; i++) {
-    const [pathErrorCheckOnly, path, handlers] = routesWithStaticPathFlag[i];
-    if (pathErrorCheckOnly) {
-      staticMap[path] = [handlers.map(([h]) => [h, /* @__PURE__ */ Object.create(null)]), emptyParam];
-    } else {
-      j++;
-    }
-    let paramAssoc;
-    try {
-      paramAssoc = trie.insert(path, j, pathErrorCheckOnly);
-    } catch (e) {
-      throw e === PATH_ERROR ? new UnsupportedPathError(path) : e;
-    }
-    if (pathErrorCheckOnly) {
-      continue;
-    }
-    handlerData[j] = handlers.map(([h, paramCount]) => {
-      const paramIndexMap = /* @__PURE__ */ Object.create(null);
-      paramCount -= 1;
-      for (; paramCount >= 0; paramCount--) {
-        const [key, value] = paramAssoc[paramCount];
-        paramIndexMap[key] = value;
-      }
-      return [h, paramIndexMap];
-    });
-  }
-  const [regexp, indexReplacementMap, paramReplacementMap] = trie.buildRegExp();
-  for (let i = 0, len = handlerData.length; i < len; i++) {
-    for (let j = 0, len2 = handlerData[i].length; j < len2; j++) {
-      const map = handlerData[i][j]?.[1];
-      if (!map) {
-        continue;
-      }
-      const keys = Object.keys(map);
-      for (let k = 0, len3 = keys.length; k < len3; k++) {
-        map[keys[k]] = paramReplacementMap[map[keys[k]]];
-      }
-    }
-  }
-  const handlerMap = [];
-  for (const i in indexReplacementMap) {
-    handlerMap[i] = handlerData[indexReplacementMap[i]];
-  }
-  return [regexp, handlerMap, staticMap];
-}
-function findMiddleware(middleware, path) {
-  if (!middleware) {
-    return void 0;
-  }
-  for (const k of Object.keys(middleware).sort((a, b) => b.length - a.length)) {
-    if (buildWildcardRegExp(k).test(path)) {
-      return [...middleware[k]];
-    }
-  }
-  return void 0;
-}
-var RegExpRouter = class {
-  name = "RegExpRouter";
-  #middleware;
-  #routes;
-  constructor() {
-    this.#middleware = { [METHOD_NAME_ALL]: /* @__PURE__ */ Object.create(null) };
-    this.#routes = { [METHOD_NAME_ALL]: /* @__PURE__ */ Object.create(null) };
-  }
-  add(method, path, handler) {
-    const middleware = this.#middleware;
-    const routes = this.#routes;
-    if (!middleware || !routes) {
-      throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
-    }
-    if (!middleware[method]) {
-      ;
-      [middleware, routes].forEach((handlerMap) => {
-        handlerMap[method] = /* @__PURE__ */ Object.create(null);
-        Object.keys(handlerMap[METHOD_NAME_ALL]).forEach((p) => {
-          handlerMap[method][p] = [...handlerMap[METHOD_NAME_ALL][p]];
-        });
-      });
-    }
-    if (path === "/*") {
-      path = "*";
-    }
-    const paramCount = (path.match(/\/:/g) || []).length;
-    if (/\*$/.test(path)) {
-      const re = buildWildcardRegExp(path);
-      if (method === METHOD_NAME_ALL) {
-        Object.keys(middleware).forEach((m) => {
-          middleware[m][path] ||= findMiddleware(middleware[m], path) || findMiddleware(middleware[METHOD_NAME_ALL], path) || [];
-        });
-      } else {
-        middleware[method][path] ||= findMiddleware(middleware[method], path) || findMiddleware(middleware[METHOD_NAME_ALL], path) || [];
-      }
-      Object.keys(middleware).forEach((m) => {
-        if (method === METHOD_NAME_ALL || method === m) {
-          Object.keys(middleware[m]).forEach((p) => {
-            re.test(p) && middleware[m][p].push([handler, paramCount]);
-          });
-        }
-      });
-      Object.keys(routes).forEach((m) => {
-        if (method === METHOD_NAME_ALL || method === m) {
-          Object.keys(routes[m]).forEach(
-            (p) => re.test(p) && routes[m][p].push([handler, paramCount])
-          );
-        }
-      });
-      return;
-    }
-    const paths = checkOptionalParameter(path) || [path];
-    for (let i = 0, len = paths.length; i < len; i++) {
-      const path2 = paths[i];
-      Object.keys(routes).forEach((m) => {
-        if (method === METHOD_NAME_ALL || method === m) {
-          routes[m][path2] ||= [
-            ...findMiddleware(middleware[m], path2) || findMiddleware(middleware[METHOD_NAME_ALL], path2) || []
-          ];
-          routes[m][path2].push([handler, paramCount - len + i + 1]);
-        }
-      });
-    }
-  }
-  match = match;
-  buildAllMatchers() {
-    const matchers = /* @__PURE__ */ Object.create(null);
-    Object.keys(this.#routes).concat(Object.keys(this.#middleware)).forEach((method) => {
-      matchers[method] ||= this.#buildMatcher(method);
-    });
-    this.#middleware = this.#routes = void 0;
-    clearWildcardRegExpCache();
-    return matchers;
-  }
-  #buildMatcher(method) {
-    const routes = [];
-    let hasOwnRoute = method === METHOD_NAME_ALL;
-    [this.#middleware, this.#routes].forEach((r) => {
-      const ownRoute = r[method] ? Object.keys(r[method]).map((path) => [path, r[method][path]]) : [];
-      if (ownRoute.length !== 0) {
-        hasOwnRoute ||= true;
-        routes.push(...ownRoute);
-      } else if (method !== METHOD_NAME_ALL) {
-        routes.push(
-          ...Object.keys(r[METHOD_NAME_ALL]).map((path) => [path, r[METHOD_NAME_ALL][path]])
-        );
-      }
-    });
-    if (!hasOwnRoute) {
-      return null;
-    } else {
-      return buildMatcherFromPreprocessedRoutes(routes);
-    }
-  }
-};
-
-// node_modules/hono/dist/router/smart-router/router.js
-var SmartRouter = class {
-  name = "SmartRouter";
-  #routers = [];
-  #routes = [];
-  constructor(init) {
-    this.#routers = init.routers;
-  }
-  add(method, path, handler) {
-    if (!this.#routes) {
-      throw new Error(MESSAGE_MATCHER_IS_ALREADY_BUILT);
-    }
-    this.#routes.push([method, path, handler]);
-  }
-  match(method, path) {
-    if (!this.#routes) {
-      throw new Error("Fatal error");
-    }
-    const routers = this.#routers;
-    const routes = this.#routes;
-    const len = routers.length;
-    let i = 0;
-    let res;
-    for (; i < len; i++) {
-      const router = routers[i];
-      try {
-        for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
-          router.add(...routes[i2]);
-        }
-        res = router.match(method, path);
-      } catch (e) {
-        if (e instanceof UnsupportedPathError) {
-          continue;
-        }
-        throw e;
-      }
-      this.match = router.match.bind(router);
-      this.#routers = [router];
-      this.#routes = void 0;
-      break;
-    }
-    if (i === len) {
-      throw new Error("Fatal error");
-    }
-    this.name = `SmartRouter + ${this.activeRouter.name}`;
-    return res;
-  }
-  get activeRouter() {
-    if (this.#routes || this.#routers.length !== 1) {
-      throw new Error("No active router has been determined yet.");
-    }
-    return this.#routers[0];
-  }
-};
-
-// node_modules/hono/dist/router/trie-router/node.js
-var emptyParams = /* @__PURE__ */ Object.create(null);
-var Node2 = class {
-  #methods;
-  #children;
-  #patterns;
-  #order = 0;
-  #params = emptyParams;
-  constructor(method, handler, children) {
-    this.#children = children || /* @__PURE__ */ Object.create(null);
-    this.#methods = [];
-    if (method && handler) {
-      const m = /* @__PURE__ */ Object.create(null);
-      m[method] = { handler, possibleKeys: [], score: 0 };
-      this.#methods = [m];
-    }
-    this.#patterns = [];
-  }
-  insert(method, path, handler) {
-    this.#order = ++this.#order;
-    let curNode = this;
-    const parts = splitRoutingPath(path);
-    const possibleKeys = [];
-    for (let i = 0, len = parts.length; i < len; i++) {
-      const p = parts[i];
-      const nextP = parts[i + 1];
-      const pattern = getPattern(p, nextP);
-      const key = Array.isArray(pattern) ? pattern[0] : p;
-      if (key in curNode.#children) {
-        curNode = curNode.#children[key];
-        if (pattern) {
-          possibleKeys.push(pattern[1]);
-        }
-        continue;
-      }
-      curNode.#children[key] = new Node2();
-      if (pattern) {
-        curNode.#patterns.push(pattern);
-        possibleKeys.push(pattern[1]);
-      }
-      curNode = curNode.#children[key];
-    }
-    curNode.#methods.push({
-      [method]: {
-        handler,
-        possibleKeys: possibleKeys.filter((v, i, a) => a.indexOf(v) === i),
-        score: this.#order
-      }
-    });
-    return curNode;
-  }
-  #getHandlerSets(node, method, nodeParams, params) {
-    const handlerSets = [];
-    for (let i = 0, len = node.#methods.length; i < len; i++) {
-      const m = node.#methods[i];
-      const handlerSet = m[method] || m[METHOD_NAME_ALL];
-      const processedSet = {};
-      if (handlerSet !== void 0) {
-        handlerSet.params = /* @__PURE__ */ Object.create(null);
-        handlerSets.push(handlerSet);
-        if (nodeParams !== emptyParams || params && params !== emptyParams) {
-          for (let i2 = 0, len2 = handlerSet.possibleKeys.length; i2 < len2; i2++) {
-            const key = handlerSet.possibleKeys[i2];
-            const processed = processedSet[handlerSet.score];
-            handlerSet.params[key] = params?.[key] && !processed ? params[key] : nodeParams[key] ?? params?.[key];
-            processedSet[handlerSet.score] = true;
-          }
-        }
-      }
-    }
-    return handlerSets;
-  }
-  search(method, path) {
-    const handlerSets = [];
-    this.#params = emptyParams;
-    const curNode = this;
-    let curNodes = [curNode];
-    const parts = splitPath(path);
-    const curNodesQueue = [];
-    for (let i = 0, len = parts.length; i < len; i++) {
-      const part = parts[i];
-      const isLast = i === len - 1;
-      const tempNodes = [];
-      for (let j = 0, len2 = curNodes.length; j < len2; j++) {
-        const node = curNodes[j];
-        const nextNode = node.#children[part];
-        if (nextNode) {
-          nextNode.#params = node.#params;
-          if (isLast) {
-            if (nextNode.#children["*"]) {
-              handlerSets.push(
-                ...this.#getHandlerSets(nextNode.#children["*"], method, node.#params)
-              );
-            }
-            handlerSets.push(...this.#getHandlerSets(nextNode, method, node.#params));
-          } else {
-            tempNodes.push(nextNode);
-          }
-        }
-        for (let k = 0, len3 = node.#patterns.length; k < len3; k++) {
-          const pattern = node.#patterns[k];
-          const params = node.#params === emptyParams ? {} : { ...node.#params };
-          if (pattern === "*") {
-            const astNode = node.#children["*"];
-            if (astNode) {
-              handlerSets.push(...this.#getHandlerSets(astNode, method, node.#params));
-              astNode.#params = params;
-              tempNodes.push(astNode);
-            }
-            continue;
-          }
-          const [key, name, matcher] = pattern;
-          if (!part && !(matcher instanceof RegExp)) {
-            continue;
-          }
-          const child = node.#children[key];
-          const restPathString = parts.slice(i).join("/");
-          if (matcher instanceof RegExp) {
-            const m = matcher.exec(restPathString);
-            if (m) {
-              params[name] = m[0];
-              handlerSets.push(...this.#getHandlerSets(child, method, node.#params, params));
-              if (Object.keys(child.#children).length) {
-                child.#params = params;
-                const componentCount = m[0].match(/\//)?.length ?? 0;
-                const targetCurNodes = curNodesQueue[componentCount] ||= [];
-                targetCurNodes.push(child);
-              }
-              continue;
-            }
-          }
-          if (matcher === true || matcher.test(part)) {
-            params[name] = part;
-            if (isLast) {
-              handlerSets.push(...this.#getHandlerSets(child, method, params, node.#params));
-              if (child.#children["*"]) {
-                handlerSets.push(
-                  ...this.#getHandlerSets(child.#children["*"], method, params, node.#params)
-                );
-              }
-            } else {
-              child.#params = params;
-              tempNodes.push(child);
-            }
-          }
-        }
-      }
-      curNodes = tempNodes.concat(curNodesQueue.shift() ?? []);
-    }
-    if (handlerSets.length > 1) {
-      handlerSets.sort((a, b) => {
-        return a.score - b.score;
-      });
-    }
-    return [handlerSets.map(({ handler, params }) => [handler, params])];
-  }
-};
-
-// node_modules/hono/dist/router/trie-router/router.js
-var TrieRouter = class {
-  name = "TrieRouter";
-  #node;
-  constructor() {
-    this.#node = new Node2();
-  }
-  add(method, path, handler) {
-    const results = checkOptionalParameter(path);
-    if (results) {
-      for (let i = 0, len = results.length; i < len; i++) {
-        this.#node.insert(method, results[i], handler);
-      }
-      return;
-    }
-    this.#node.insert(method, path, handler);
-  }
-  match(method, path) {
-    return this.#node.search(method, path);
-  }
-};
-
-// node_modules/hono/dist/hono.js
-var Hono2 = class extends Hono {
-  constructor(options = {}) {
-    super(options);
-    this.router = options.router ?? new SmartRouter({
-      routers: [new RegExpRouter(), new TrieRouter()]
-    });
-  }
-};
-
-// node_modules/hono/dist/middleware/cors/index.js
-var cors = (options) => {
-  const defaults = {
-    origin: "*",
-    allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH"],
-    allowHeaders: [],
-    exposeHeaders: []
-  };
-  const opts = {
-    ...defaults,
-    ...options
-  };
-  const findAllowOrigin = ((optsOrigin) => {
-    if (typeof optsOrigin === "string") {
-      if (optsOrigin === "*") {
-        return () => optsOrigin;
-      } else {
-        return (origin) => optsOrigin === origin ? origin : null;
-      }
-    } else if (typeof optsOrigin === "function") {
-      return optsOrigin;
-    } else {
-      return (origin) => optsOrigin.includes(origin) ? origin : null;
-    }
-  })(opts.origin);
-  const findAllowMethods = ((optsAllowMethods) => {
-    if (typeof optsAllowMethods === "function") {
-      return optsAllowMethods;
-    } else if (Array.isArray(optsAllowMethods)) {
-      return () => optsAllowMethods;
-    } else {
-      return () => [];
-    }
-  })(opts.allowMethods);
-  return async function cors2(c, next) {
-    function set(key, value) {
-      c.res.headers.set(key, value);
-    }
-    const allowOrigin = await findAllowOrigin(c.req.header("origin") || "", c);
-    if (allowOrigin) {
-      set("Access-Control-Allow-Origin", allowOrigin);
-    }
-    if (opts.credentials) {
-      set("Access-Control-Allow-Credentials", "true");
-    }
-    if (opts.exposeHeaders?.length) {
-      set("Access-Control-Expose-Headers", opts.exposeHeaders.join(","));
-    }
-    if (c.req.method === "OPTIONS") {
-      if (opts.origin !== "*") {
-        set("Vary", "Origin");
-      }
-      if (opts.maxAge != null) {
-        set("Access-Control-Max-Age", opts.maxAge.toString());
-      }
-      const allowMethods = await findAllowMethods(c.req.header("origin") || "", c);
-      if (allowMethods.length) {
-        set("Access-Control-Allow-Methods", allowMethods.join(","));
-      }
-      let headers = opts.allowHeaders;
-      if (!headers?.length) {
-        const requestHeaders = c.req.header("Access-Control-Request-Headers");
-        if (requestHeaders) {
-          headers = requestHeaders.split(/\s*,\s*/);
-        }
-      }
-      if (headers?.length) {
-        set("Access-Control-Allow-Headers", headers.join(","));
-        c.res.headers.append("Vary", "Access-Control-Request-Headers");
-      }
-      c.res.headers.delete("Content-Length");
-      c.res.headers.delete("Content-Type");
-      return new Response(null, {
-        headers: c.res.headers,
-        status: 204,
-        statusText: "No Content"
-      });
-    }
-    await next();
-    if (opts.origin !== "*") {
-      c.header("Vary", "Origin", { append: true });
-    }
-  };
-};
-
-// node_modules/hono/dist/utils/color.js
-function getColorEnabled() {
-  const { process, Deno } = globalThis;
-  const isNoColor = typeof Deno?.noColor === "boolean" ? Deno.noColor : process !== void 0 ? "NO_COLOR" in process?.env : false;
-  return !isNoColor;
-}
-async function getColorEnabledAsync() {
-  const { navigator } = globalThis;
-  const cfWorkers = "cloudflare:workers";
-  const isNoColor = navigator !== void 0 && navigator.userAgent === "Cloudflare-Workers" ? await (async () => {
-    try {
-      return "NO_COLOR" in ((await import(cfWorkers)).env ?? {});
-    } catch {
-      return false;
-    }
-  })() : !getColorEnabled();
-  return !isNoColor;
-}
-
-// node_modules/hono/dist/middleware/logger/index.js
-var humanize = (times) => {
-  const [delimiter, separator] = [",", "."];
-  const orderTimes = times.map((v) => v.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1" + delimiter));
-  return orderTimes.join(separator);
-};
-var time = (start) => {
-  const delta = Date.now() - start;
-  return humanize([delta < 1e3 ? delta + "ms" : Math.round(delta / 1e3) + "s"]);
-};
-var colorStatus = async (status) => {
-  const colorEnabled = await getColorEnabledAsync();
-  if (colorEnabled) {
-    switch (status / 100 | 0) {
-      case 5:
-        return `\x1B[31m${status}\x1B[0m`;
-      case 4:
-        return `\x1B[33m${status}\x1B[0m`;
-      case 3:
-        return `\x1B[36m${status}\x1B[0m`;
-      case 2:
-        return `\x1B[32m${status}\x1B[0m`;
-    }
-  }
-  return `${status}`;
-};
-async function log(fn, prefix, method, path, status = 0, elapsed) {
-  const out = prefix === "<--" ? `${prefix} ${method} ${path}` : `${prefix} ${method} ${path} ${await colorStatus(status)} ${elapsed}`;
-  fn(out);
-}
-var logger = (fn = console.log) => {
-  return async function logger2(c, next) {
-    const { method, url } = c.req;
-    const path = url.slice(url.indexOf("/", 8));
-    await log(fn, "<--", method, path);
-    const start = Date.now();
-    await next();
-    await log(fn, "-->", method, path, c.res.status, time(start));
-  };
-};
-
-// src/types.ts
-var DEFAULT_SCHEDULE = {
-  fetchInterval: "hourly",
-  autoApprove: true,
-  approveTimes: ["09:00", "14:00", "21:00"],
-  timezone: "Asia/Seoul"
-};
-var DEFAULT_SETTINGS = {
-  persona: "AI \uC7A1\uB3CC\uC774",
-  tone: "\uCE5C\uADFC\uD558\uACE0 \uACB8\uC190\uD55C",
-  customInstructions: "",
-  // 레거시 (하위 호환용)
-  attitudeMap: {
-    positive: "gratitude",
-    negative: "graceful",
-    question: "expert",
-    suggestion: "empathy",
-    reaction: "humor",
-    other: "friendly"
-  },
-  commonInstructions: `- 200\uC790 \uC774\uB0B4\uB85C \uC9E7\uAC8C
+var Pn=Object.defineProperty;var $n=(e,t)=>()=>(e&&(t=e(e=0)),t);var On=(e,t)=>{for(var n in t)Pn(e,n,{get:t[n],enumerable:!0})};var tn={};On(tn,{exchangeCodeForChannel:()=>Qe,fetchChannelComments:()=>te,postReplyWithChannel:()=>Xe,refreshChannelToken:()=>Ge});async function Ge(e,t){let n=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:e.YOUTUBE_CLIENT_ID,client_secret:e.YOUTUBE_CLIENT_SECRET,refresh_token:t,grant_type:"refresh_token"})});if(!n.ok){let s=await n.text();throw new Error(`Failed to refresh token: ${s}`)}let o=await n.json();return{accessToken:o.access_token,expiresAt:new Date(Date.now()+o.expires_in*1e3).toISOString()}}async function Qe(e,t,n){let o=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:e.YOUTUBE_CLIENT_ID,client_secret:e.YOUTUBE_CLIENT_SECRET,code:t,grant_type:"authorization_code",redirect_uri:n})});if(!o.ok){let i=await o.text();throw new Error(`Failed to exchange code: ${i}`)}let s=await o.json(),r=await fetch(`${V}/channels?part=snippet&mine=true`,{headers:{Authorization:`Bearer ${s.access_token}`}});if(!r.ok)throw new Error("Failed to get channel info");let c=(await r.json()).items?.[0];if(!c)throw new Error("No channel found for this account");return{accessToken:s.access_token,refreshToken:s.refresh_token,expiresAt:new Date(Date.now()+s.expires_in*1e3).toISOString(),channelId:c.id,channelTitle:c.snippet.title}}async function uo(e,t){let n=[],o=await fetch(`${V}/channels?part=contentDetails&id=${t.youtube.channelId}&key=${e.YOUTUBE_API_KEY}`);if(!o.ok)throw new Error(`Failed to get channel: ${o.statusText}`);let r=(await o.json()).items?.[0]?.contentDetails?.relatedPlaylists?.uploads;if(!r)throw new Error("Could not find uploads playlist");let a=await fetch(`${V}/playlistItems?part=contentDetails&playlistId=${r}&maxResults=50&key=${e.YOUTUBE_API_KEY}`);if(!a.ok)throw new Error(`Failed to get playlist items: ${a.statusText}`);let c=await a.json();for(let i of c.items||[])n.push(i.contentDetails.videoId);return n}async function mo(e,t){let n=await fetch(`${V}/videos?part=snippet&id=${t}&key=${e.YOUTUBE_API_KEY}`);if(!n.ok)throw new Error(`Failed to get video info: ${n.statusText}`);return{title:(await n.json()).items?.[0]?.snippet?.title||"Unknown"}}async function go(e,t){let n=await fetch(`${V}/commentThreads?part=snippet,replies&videoId=${t}&maxResults=100&order=time&key=${e.YOUTUBE_API_KEY}`);if(!n.ok){if(n.status===403)return console.log(`Comments disabled for video ${t}`),[];throw new Error(`Failed to get comments: ${n.statusText}`)}return(await n.json()).items||[]}function fo(e,t){if(e.replies?.comments){let n=e.replies.comments.find(o=>o.snippet.authorChannelId.value===t);if(n)return{hasReply:!0,replyText:n.snippet.textDisplay}}return{hasReply:!1}}async function te(e,t){let n=[],o=await uo(e,t);for(let s of o){let r=await mo(e,s),a=await go(e,s);for(let c of a){let i=c.snippet.topLevelComment.snippet,l=c.snippet.topLevelComment.id;if(i.authorChannelId.value===t.youtube.channelId)continue;let{hasReply:d,replyText:p}=fo(c,t.youtube.channelId);n.push({id:l,videoId:s,videoTitle:r.title,authorName:i.authorDisplayName,authorChannelId:i.authorChannelId.value,text:i.textDisplay,publishedAt:i.publishedAt,status:d?"replied":"unclassified",replyText:d?p:void 0})}}return n}async function Xe(e,t,n,o){let s=await fetch(`${V}/comments?part=snippet`,{method:"POST",headers:{Authorization:`Bearer ${t.youtube.accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({snippet:{parentId:n,textOriginal:o}})});if(!s.ok){let r=await s.text();throw new Error(`Failed to post reply: ${s.statusText} - ${r}`)}}var V,we=$n(()=>{"use strict";V="https://www.googleapis.com/youtube/v3"});var Ee=(e,t,n)=>(o,s)=>{let r=-1;return a(0);async function a(c){if(c<=r)throw new Error("next() called multiple times");r=c;let i,l=!1,d;if(e[c]?(d=e[c][0][0],o.req.routeIndex=c):d=c===e.length&&s||void 0,d)try{i=await d(o,()=>a(c+1))}catch(p){if(p instanceof Error&&t)o.error=p,i=await t(p,o),l=!0;else throw p}else o.finalized===!1&&n&&(i=await n(o));return i&&(o.finalized===!1||l)&&(o.res=i),o}};var Se=class extends Error{res;status;constructor(e=500,t){super(t?.message,{cause:t?.cause}),this.res=t?.res,this.status=e}getResponse(){return this.res?new Response(this.res.body,{status:this.status,headers:this.res.headers}):new Response(this.message,{status:this.status})}};var it=Symbol();var ct=async(e,t=Object.create(null))=>{let{all:n=!1,dot:o=!1}=t,r=(e instanceof oe?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?jn(e,{all:n,dot:o}):{}};async function jn(e,t){let n=await e.formData();return n?_n(n,t):{}}function _n(e,t){let n=Object.create(null);return e.forEach((o,s)=>{t.all||s.endsWith("[]")?Kn(n,s,o):n[s]=o}),t.dot&&Object.entries(n).forEach(([o,s])=>{o.includes(".")&&(Dn(n,o,s),delete n[o])}),n}var Kn=(e,t,n)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(n):e[t]=[e[t],n]:t.endsWith("[]")?e[t]=[n]:e[t]=n},Dn=(e,t,n)=>{let o=e,s=t.split(".");s.forEach((r,a)=>{a===s.length-1?o[r]=n:((!o[r]||typeof o[r]!="object"||Array.isArray(o[r])||o[r]instanceof File)&&(o[r]=Object.create(null)),o=o[r])})};var Pe=e=>{let t=e.split("/");return t[0]===""&&t.shift(),t},lt=e=>{let{groups:t,path:n}=Ln(e),o=Pe(n);return Un(o,t)},Ln=e=>{let t=[];return e=e.replace(/\{[^}]+\}/g,(n,o)=>{let s=`@${o}`;return t.push([s,n]),s}),{groups:t,path:e}},Un=(e,t)=>{for(let n=t.length-1;n>=0;n--){let[o]=t[n];for(let s=e.length-1;s>=0;s--)if(e[s].includes(o)){e[s]=e[s].replace(o,t[n][1]);break}}return e},se={},dt=(e,t)=>{if(e==="*")return"*";let n=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(n){let o=`${e}#${t}`;return se[o]||(n[2]?se[o]=t&&t[0]!==":"&&t[0]!=="*"?[o,n[1],new RegExp(`^${n[2]}(?=/${t})`)]:[e,n[1],new RegExp(`^${n[2]}$`)]:se[o]=[e,n[1],!0]),se[o]}return null},re=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,n=>{try{return t(n)}catch{return n}})}},Nn=e=>re(e,decodeURI),$e=e=>{let t=e.url,n=t.indexOf("/",t.indexOf(":")+4),o=n;for(;o<t.length;o++){let s=t.charCodeAt(o);if(s===37){let r=t.indexOf("?",o),a=t.slice(n,r===-1?void 0:r);return Nn(a.includes("%25")?a.replace(/%25/g,"%2525"):a)}else if(s===63)break}return t.slice(n,o)};var pt=e=>{let t=$e(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},O=(e,t,...n)=>(n.length&&(t=O(t,...n)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),ae=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;let t=e.split("/"),n=[],o="";return t.forEach(s=>{if(s!==""&&!/\:/.test(s))o+="/"+s;else if(/\:/.test(s))if(/\?/.test(s)){n.length===0&&o===""?n.push("/"):n.push(o);let r=s.replace("?","");o+="/"+r,n.push(o)}else o+="/"+s}),n.filter((s,r,a)=>a.indexOf(s)===r)},Re=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?re(e,Oe):e):e,ut=(e,t,n)=>{let o;if(!n&&t&&!/[%+]/.test(t)){let a=e.indexOf("?",8);if(a===-1)return;for(e.startsWith(t,a+1)||(a=e.indexOf(`&${t}`,a+1));a!==-1;){let c=e.charCodeAt(a+t.length+1);if(c===61){let i=a+t.length+2,l=e.indexOf("&",i);return Re(e.slice(i,l===-1?void 0:l))}else if(c==38||isNaN(c))return"";a=e.indexOf(`&${t}`,a+1)}if(o=/[%+]/.test(e),!o)return}let s={};o??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){let a=e.indexOf("&",r+1),c=e.indexOf("=",r);c>a&&a!==-1&&(c=-1);let i=e.slice(r+1,c===-1?a===-1?void 0:a:c);if(o&&(i=Re(i)),r=a,i==="")continue;let l;c===-1?l="":(l=e.slice(c+1,a===-1?void 0:a),o&&(l=Re(l))),n?(s[i]&&Array.isArray(s[i])||(s[i]=[]),s[i].push(l)):s[i]??=l}return t?s[t]:s},mt=ut,gt=(e,t)=>ut(e,t,!0),Oe=decodeURIComponent;var ft=e=>re(e,Oe),oe=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",n=[[]]){this.raw=e,this.path=t,this.#e=n,this.#t={}}param(e){return e?this.#n(e):this.#r()}#n(e){let t=this.#e[0][this.routeIndex][1][e],n=this.#s(t);return n&&/\%/.test(n)?ft(n):n}#r(){let e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(let n of t){let o=this.#s(this.#e[0][this.routeIndex][1][n]);o!==void 0&&(e[n]=/\%/.test(o)?ft(o):o)}return e}#s(e){return this.#e[1]?this.#e[1][e]:e}query(e){return mt(this.url,e)}queries(e){return gt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;let t={};return this.raw.headers.forEach((n,o)=>{t[o]=n}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ct(this,e)}#o=e=>{let{bodyCache:t,raw:n}=this,o=t[e];if(o)return o;let s=Object.keys(t)[0];return s?t[s].then(r=>(s==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=n[e]()};json(){return this.#o("text").then(e=>JSON.parse(e))}text(){return this.#o("text")}arrayBuffer(){return this.#o("arrayBuffer")}blob(){return this.#o("blob")}formData(){return this.#o("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[it](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}};var ht={Stringify:1,BeforeStream:2,Stream:3},zn=(e,t)=>{let n=new String(e);return n.isEscaped=!0,n.callbacks=t,n};var je=async(e,t,n,o,s)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));let r=e.callbacks;if(!r?.length)return Promise.resolve(e);s?s[0]+=e:s=[e];let a=Promise.all(r.map(c=>c({phase:t,buffer:s,context:o}))).then(c=>Promise.all(c.filter(Boolean).map(i=>je(i,t,!1,o,s))).then(()=>s[0]));return n?zn(await a,r):a};var Bn="text/plain; charset=UTF-8",_e=(e,t)=>({"Content-Type":e,...t}),bt=class{#t;#e;env={};#n;finalized=!1;error;#r;#s;#o;#d;#c;#l;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#s=t.executionCtx,this.env=t.env,this.#l=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new oe(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#s&&"respondWith"in this.#s)return this.#s;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#s)return this.#s;throw Error("This context has no ExecutionContext")}get res(){return this.#o||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#o&&e){e=new Response(e.body,e);for(let[t,n]of this.#o.headers.entries())if(t!=="content-type")if(t==="set-cookie"){let o=this.#o.headers.getSetCookie();e.headers.delete("set-cookie");for(let s of o)e.headers.append("set-cookie",s)}else e.headers.set(t,n)}this.#o=e,this.finalized=!0}render=(...e)=>(this.#c??=t=>this.html(t),this.#c(...e));setLayout=e=>this.#d=e;getLayout=()=>this.#d;setRenderer=e=>{this.#c=e};header=(e,t,n)=>{this.finalized&&(this.#o=new Response(this.#o.body,this.#o));let o=this.#o?this.#o.headers:this.#i??=new Headers;t===void 0?o.delete(e):n?.append?o.append(e,t):o.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#n??=new Map,this.#n.set(e,t)};get=e=>this.#n?this.#n.get(e):void 0;get var(){return this.#n?Object.fromEntries(this.#n):{}}#a(e,t,n){let o=this.#o?new Headers(this.#o.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){let r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(let[a,c]of r)a.toLowerCase()==="set-cookie"?o.append(a,c):o.set(a,c)}if(n)for(let[r,a]of Object.entries(n))if(typeof a=="string")o.set(r,a);else{o.delete(r);for(let c of a)o.append(r,c)}let s=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:s,headers:o})}newResponse=(...e)=>this.#a(...e);body=(e,t,n)=>this.#a(e,t,n);text=(e,t,n)=>!this.#i&&!this.#r&&!t&&!n&&!this.finalized?new Response(e):this.#a(e,t,_e(Bn,n));json=(e,t,n)=>this.#a(JSON.stringify(e),t,_e("application/json",n));html=(e,t,n)=>{let o=s=>this.#a(s,t,_e("text/html; charset=UTF-8",n));return typeof e=="object"?je(e,ht.Stringify,!1,{}).then(o):o(e)};redirect=(e,t)=>{let n=String(e);return this.header("Location",/[^\x00-\xFF]/.test(n)?encodeURI(n):n),this.newResponse(null,t??302)};notFound=()=>(this.#l??=()=>new Response,this.#l(this))};var f="ALL",yt="all",xt=["get","post","put","delete","options","patch"],ie="Can not add a route since the matcher is already built.",ce=class extends Error{};var vt="__COMPOSED_HANDLER";var Fn=e=>e.text("404 Not Found",404),wt=(e,t)=>{if("getResponse"in e){let n=e.getResponse();return t.newResponse(n.body,n)}return console.error(e),t.text("Internal Server Error",500)},Ke=class{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(e={}){[...xt,yt].forEach(s=>{this[s]=(r,...a)=>(typeof r=="string"?this.#t=r:this.#r(s,this.#t,r),a.forEach(c=>{this.#r(s,this.#t,c)}),this)}),this.on=(s,r,...a)=>{for(let c of[r].flat()){this.#t=c;for(let i of[s].flat())a.map(l=>{this.#r(i.toUpperCase(),this.#t,l)})}return this},this.use=(s,...r)=>(typeof s=="string"?this.#t=s:(this.#t="*",r.unshift(s)),r.forEach(a=>{this.#r(f,this.#t,a)}),this);let{strict:n,...o}=e;Object.assign(this,o),this.getPath=n??!0?e.getPath??$e:pt}#e(){let e=new Ke({router:this.router,getPath:this.getPath});return e.errorHandler=this.errorHandler,e.#n=this.#n,e.routes=this.routes,e}#n=Fn;errorHandler=wt;route(e,t){let n=this.basePath(e);return t.routes.map(o=>{let s;t.errorHandler===wt?s=o.handler:(s=async(r,a)=>(await Ee([],t.errorHandler)(r,()=>o.handler(r,a))).res,s[vt]=o.handler),n.#r(o.method,o.path,s)}),this}basePath(e){let t=this.#e();return t._basePath=O(this._basePath,e),t}onError=e=>(this.errorHandler=e,this);notFound=e=>(this.#n=e,this);mount(e,t,n){let o,s;n&&(typeof n=="function"?s=n:(s=n.optionHandler,n.replaceRequest===!1?o=c=>c:o=n.replaceRequest));let r=s?c=>{let i=s(c);return Array.isArray(i)?i:[i]}:c=>{let i;try{i=c.executionCtx}catch{}return[c.env,i]};o||=(()=>{let c=O(this._basePath,e),i=c==="/"?0:c.length;return l=>{let d=new URL(l.url);return d.pathname=d.pathname.slice(i)||"/",new Request(d,l)}})();let a=async(c,i)=>{let l=await t(o(c.req.raw),...r(c));if(l)return l;await i()};return this.#r(f,O(e,"*"),a),this}#r(e,t,n){e=e.toUpperCase(),t=O(this._basePath,t);let o={basePath:this._basePath,path:t,method:e,handler:n};this.router.add(e,t,[n,o]),this.routes.push(o)}#s(e,t){if(e instanceof Error)return this.errorHandler(e,t);throw e}#o(e,t,n,o){if(o==="HEAD")return(async()=>new Response(null,await this.#o(e,t,n,"GET")))();let s=this.getPath(e,{env:n}),r=this.router.match(o,s),a=new bt(e,{path:s,matchResult:r,env:n,executionCtx:t,notFoundHandler:this.#n});if(r[0].length===1){let i;try{i=r[0][0][0][0](a,async()=>{a.res=await this.#n(a)})}catch(l){return this.#s(l,a)}return i instanceof Promise?i.then(l=>l||(a.finalized?a.res:this.#n(a))).catch(l=>this.#s(l,a)):i??this.#n(a)}let c=Ee(r[0],this.errorHandler,this.#n);return(async()=>{try{let i=await c(a);if(!i.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return i.res}catch(i){return this.#s(i,a)}})()}fetch=(e,...t)=>this.#o(e,t[1],t[0],e.method);request=(e,t,n,o)=>e instanceof Request?this.fetch(t?new Request(e,t):e,n,o):(e=e.toString(),this.fetch(new Request(/^https?:\/\//.test(e)?e:`http://localhost${O("/",e)}`,t),n,o));fire=()=>{addEventListener("fetch",e=>{e.respondWith(this.#o(e.request,e,void 0,e.request.method))})}};var le=[];function De(e,t){let n=this.buildAllMatchers(),o=(s,r)=>{let a=n[s]||n[f],c=a[2][r];if(c)return c;let i=r.match(a[0]);if(!i)return[[],le];let l=i.indexOf("",1);return[a[1][l],i]};return this.match=o,o(e,t)}var de="[^/]+",W=".*",G="(?:|/.*)",j=Symbol(),Vn=new Set(".\\+*[^]$()");function Mn(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===W||e===G?1:t===W||t===G?-1:e===de?1:t===de?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var pe=class{#t;#e;#n=Object.create(null);insert(e,t,n,o,s){if(e.length===0){if(this.#t!==void 0)throw j;if(s)return;this.#t=t;return}let[r,...a]=e,c=r==="*"?a.length===0?["","",W]:["","",de]:r==="/*"?["","",G]:r.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/),i;if(c){let l=c[1],d=c[2]||de;if(l&&c[2]&&(d===".*"||(d=d.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(d))))throw j;if(i=this.#n[d],!i){if(Object.keys(this.#n).some(p=>p!==W&&p!==G))throw j;if(s)return;i=this.#n[d]=new pe,l!==""&&(i.#e=o.varIndex++)}!s&&l!==""&&n.push([l,i.#e])}else if(i=this.#n[r],!i){if(Object.keys(this.#n).some(l=>l.length>1&&l!==W&&l!==G))throw j;if(s)return;i=this.#n[r]=new pe}i.insert(a,t,n,o,s)}buildRegExpStr(){let t=Object.keys(this.#n).sort(Mn).map(n=>{let o=this.#n[n];return(typeof o.#e=="number"?`(${n})@${o.#e}`:Vn.has(n)?`\\${n}`:n)+o.buildRegExpStr()});return typeof this.#t=="number"&&t.unshift(`#${this.#t}`),t.length===0?"":t.length===1?t[0]:"(?:"+t.join("|")+")"}};var At=class{#t={varIndex:0};#e=new pe;insert(e,t,n){let o=[],s=[];for(let a=0;;){let c=!1;if(e=e.replace(/\{[^}]+\}/g,i=>{let l=`@\\${a}`;return s[a]=[l,i],a++,c=!0,l}),!c)break}let r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let a=s.length-1;a>=0;a--){let[c]=s[a];for(let i=r.length-1;i>=0;i--)if(r[i].indexOf(c)!==-1){r[i]=r[i].replace(c,s[a][1]);break}}return this.#e.insert(r,t,o,this.#t,n),o}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0,n=[],o=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(s,r,a)=>r!==void 0?(n[++t]=Number(r),"$()"):(a!==void 0&&(o[Number(a)]=++t),"")),[new RegExp(`^${e}`),n,o]}};var qn=[/^$/,[],Object.create(null)],kt=Object.create(null);function Tt(e){return kt[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,n)=>n?`\\${n}`:"(?:|/.*)")}$`)}function Hn(){kt=Object.create(null)}function Yn(e){let t=new At,n=[];if(e.length===0)return qn;let o=e.map(l=>[!/\*|\/:/.test(l[0]),...l]).sort(([l,d],[p,m])=>l?1:p?-1:d.length-m.length),s=Object.create(null);for(let l=0,d=-1,p=o.length;l<p;l++){let[m,g,u]=o[l];m?s[g]=[u.map(([x])=>[x,Object.create(null)]),le]:d++;let y;try{y=t.insert(g,d,m)}catch(x){throw x===j?new ce(g):x}m||(n[d]=u.map(([x,U])=>{let Y=Object.create(null);for(U-=1;U>=0;U--){let[E,Ce]=y[U];Y[E]=Ce}return[x,Y]}))}let[r,a,c]=t.buildRegExp();for(let l=0,d=n.length;l<d;l++)for(let p=0,m=n[l].length;p<m;p++){let g=n[l][p]?.[1];if(!g)continue;let u=Object.keys(g);for(let y=0,x=u.length;y<x;y++)g[u[y]]=c[g[u[y]]]}let i=[];for(let l in a)i[l]=n[a[l]];return[r,i,s]}function N(e,t){if(e){for(let n of Object.keys(e).sort((o,s)=>s.length-o.length))if(Tt(n).test(t))return[...e[n]]}}var ue=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[f]:Object.create(null)},this.#e={[f]:Object.create(null)}}add(e,t,n){let o=this.#t,s=this.#e;if(!o||!s)throw new Error(ie);o[e]||[o,s].forEach(c=>{c[e]=Object.create(null),Object.keys(c[f]).forEach(i=>{c[e][i]=[...c[f][i]]})}),t==="/*"&&(t="*");let r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){let c=Tt(t);e===f?Object.keys(o).forEach(i=>{o[i][t]||=N(o[i],t)||N(o[f],t)||[]}):o[e][t]||=N(o[e],t)||N(o[f],t)||[],Object.keys(o).forEach(i=>{(e===f||e===i)&&Object.keys(o[i]).forEach(l=>{c.test(l)&&o[i][l].push([n,r])})}),Object.keys(s).forEach(i=>{(e===f||e===i)&&Object.keys(s[i]).forEach(l=>c.test(l)&&s[i][l].push([n,r]))});return}let a=ae(t)||[t];for(let c=0,i=a.length;c<i;c++){let l=a[c];Object.keys(s).forEach(d=>{(e===f||e===d)&&(s[d][l]||=[...N(o[d],l)||N(o[f],l)||[]],s[d][l].push([n,r-i+c+1]))})}}match=De;buildAllMatchers(){let e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#n(t)}),this.#t=this.#e=void 0,Hn(),e}#n(e){let t=[],n=e===f;return[this.#t,this.#e].forEach(o=>{let s=o[e]?Object.keys(o[e]).map(r=>[r,o[e][r]]):[];s.length!==0?(n||=!0,t.push(...s)):e!==f&&t.push(...Object.keys(o[f]).map(r=>[r,o[f][r]]))}),n?Yn(t):null}};var Le=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,n){if(!this.#e)throw new Error(ie);this.#e.push([e,t,n])}match(e,t){if(!this.#e)throw new Error("Fatal error");let n=this.#t,o=this.#e,s=n.length,r=0,a;for(;r<s;r++){let c=n[r];try{for(let i=0,l=o.length;i<l;i++)c.add(...o[i]);a=c.match(e,t)}catch(i){if(i instanceof ce)continue;throw i}this.match=c.match.bind(c),this.#t=[c],this.#e=void 0;break}if(r===s)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,a}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}};var Q=Object.create(null),Ue=class{#t;#e;#n;#r=0;#s=Q;constructor(e,t,n){if(this.#e=n||Object.create(null),this.#t=[],e&&t){let o=Object.create(null);o[e]={handler:t,possibleKeys:[],score:0},this.#t=[o]}this.#n=[]}insert(e,t,n){this.#r=++this.#r;let o=this,s=lt(t),r=[];for(let a=0,c=s.length;a<c;a++){let i=s[a],l=s[a+1],d=dt(i,l),p=Array.isArray(d)?d[0]:i;if(p in o.#e){o=o.#e[p],d&&r.push(d[1]);continue}o.#e[p]=new Ue,d&&(o.#n.push(d),r.push(d[1])),o=o.#e[p]}return o.#t.push({[e]:{handler:n,possibleKeys:r.filter((a,c,i)=>i.indexOf(a)===c),score:this.#r}}),o}#o(e,t,n,o){let s=[];for(let r=0,a=e.#t.length;r<a;r++){let c=e.#t[r],i=c[t]||c[f],l={};if(i!==void 0&&(i.params=Object.create(null),s.push(i),n!==Q||o&&o!==Q))for(let d=0,p=i.possibleKeys.length;d<p;d++){let m=i.possibleKeys[d],g=l[i.score];i.params[m]=o?.[m]&&!g?o[m]:n[m]??o?.[m],l[i.score]=!0}}return s}search(e,t){let n=[];this.#s=Q;let s=[this],r=Pe(t),a=[];for(let c=0,i=r.length;c<i;c++){let l=r[c],d=c===i-1,p=[];for(let m=0,g=s.length;m<g;m++){let u=s[m],y=u.#e[l];y&&(y.#s=u.#s,d?(y.#e["*"]&&n.push(...this.#o(y.#e["*"],e,u.#s)),n.push(...this.#o(y,e,u.#s))):p.push(y));for(let x=0,U=u.#n.length;x<U;x++){let Y=u.#n[x],E=u.#s===Q?{}:{...u.#s};if(Y==="*"){let R=u.#e["*"];R&&(n.push(...this.#o(R,e,u.#s)),R.#s=E,p.push(R));continue}let[Ce,at,J]=Y;if(!l&&!(J instanceof RegExp))continue;let S=u.#e[Ce],Sn=r.slice(c).join("/");if(J instanceof RegExp){let R=J.exec(Sn);if(R){if(E[at]=R[0],n.push(...this.#o(S,e,u.#s,E)),Object.keys(S.#e).length){S.#s=E;let Rn=R[0].match(/\//)?.length??0;(a[Rn]||=[]).push(S)}continue}}(J===!0||J.test(l))&&(E[at]=l,d?(n.push(...this.#o(S,e,E,u.#s)),S.#e["*"]&&n.push(...this.#o(S.#e["*"],e,E,u.#s))):(S.#s=E,p.push(S)))}}s=p.concat(a.shift()??[])}return n.length>1&&n.sort((c,i)=>c.score-i.score),[n.map(({handler:c,params:i})=>[c,i])]}};var Ne=class{name="TrieRouter";#t;constructor(){this.#t=new Ue}add(e,t,n){let o=ae(t);if(o){for(let s=0,r=o.length;s<r;s++)this.#t.insert(e,o[s],n);return}this.#t.insert(e,t,n)}match(e,t){return this.#t.search(e,t)}};var k=class extends Ke{constructor(e={}){super(e),this.router=e.router??new Le({routers:[new ue,new Ne]})}};var It=e=>{let n={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},o=(r=>typeof r=="string"?r==="*"?()=>r:a=>r===a?a:null:typeof r=="function"?r:a=>r.includes(a)?a:null)(n.origin),s=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(n.allowMethods);return async function(a,c){function i(d,p){a.res.headers.set(d,p)}let l=await o(a.req.header("origin")||"",a);if(l&&i("Access-Control-Allow-Origin",l),n.credentials&&i("Access-Control-Allow-Credentials","true"),n.exposeHeaders?.length&&i("Access-Control-Expose-Headers",n.exposeHeaders.join(",")),a.req.method==="OPTIONS"){n.origin!=="*"&&i("Vary","Origin"),n.maxAge!=null&&i("Access-Control-Max-Age",n.maxAge.toString());let d=await s(a.req.header("origin")||"",a);d.length&&i("Access-Control-Allow-Methods",d.join(","));let p=n.allowHeaders;if(!p?.length){let m=a.req.header("Access-Control-Request-Headers");m&&(p=m.split(/\s*,\s*/))}return p?.length&&(i("Access-Control-Allow-Headers",p.join(",")),a.res.headers.append("Vary","Access-Control-Request-Headers")),a.res.headers.delete("Content-Length"),a.res.headers.delete("Content-Type"),new Response(null,{headers:a.res.headers,status:204,statusText:"No Content"})}await c(),n.origin!=="*"&&a.header("Vary","Origin",{append:!0})}};function Jn(){let{process:e,Deno:t}=globalThis;return!(typeof t?.noColor=="boolean"?t.noColor:e!==void 0?"NO_COLOR"in e?.env:!1)}async function Ct(){let{navigator:e}=globalThis,t="cloudflare:workers";return!(e!==void 0&&e.userAgent==="Cloudflare-Workers"?await(async()=>{try{return"NO_COLOR"in((await import(t)).env??{})}catch{return!1}})():!Jn())}var Wn=e=>{let[t,n]=[",","."];return e.map(s=>s.replace(/(\d)(?=(\d\d\d)+(?!\d))/g,"$1"+t)).join(n)},Gn=e=>{let t=Date.now()-e;return Wn([t<1e3?t+"ms":Math.round(t/1e3)+"s"])},Qn=async e=>{if(await Ct())switch(e/100|0){case 5:return`\x1B[31m${e}\x1B[0m`;case 4:return`\x1B[33m${e}\x1B[0m`;case 3:return`\x1B[36m${e}\x1B[0m`;case 2:return`\x1B[32m${e}\x1B[0m`}return`${e}`};async function Et(e,t,n,o,s=0,r){let a=t==="<--"?`${t} ${n} ${o}`:`${t} ${n} ${o} ${await Qn(s)} ${r}`;e(a)}var St=(e=console.log)=>async function(n,o){let{method:s,url:r}=n.req,a=r.slice(r.indexOf("/",8));await Et(e,"<--",s,a);let c=Date.now();await o(),await Et(e,"-->",s,a,n.res.status,Gn(c))};var me={fetchInterval:"hourly",autoApprove:!0,approveTimes:["09:00","14:00","21:00"],timezone:"Asia/Seoul"},z={persona:"AI \uC7A1\uB3CC\uC774",tone:"\uCE5C\uADFC\uD558\uACE0 \uACB8\uC190\uD55C",customInstructions:"",attitudeMap:{positive:"gratitude",negative:"graceful",question:"expert",suggestion:"empathy",reaction:"humor",other:"friendly"},commonInstructions:`- 200\uC790 \uC774\uB0B4\uB85C \uC9E7\uAC8C
 - \uC774\uBAA8\uC9C0 1-2\uAC1C\uB9CC
 - "\uC548\uB155\uD558\uC138\uC694" \uAC19\uC740 \uD615\uC2DD\uC801 \uC778\uC0AC \uAE08\uC9C0
 - \uC808\uB300 \uBC29\uC5B4\uC801\uC774\uC9C0 \uC54A\uAC8C
-- \uC2DC\uCCAD\uC790 \uC774\uB984 \uC5B8\uAE09\uD558\uC9C0 \uC54A\uAE30`,
-  typeInstructions: {
-    positive: {
-      enabled: true,
-      instruction: "\uC9C4\uC2EC\uC5B4\uB9B0 \uAC10\uC0AC\uB97C \uD45C\uD604\uD558\uC138\uC694. \uC751\uC6D0\uC774 \uD070 \uD798\uC774 \uB41C\uB2E4\uB294 \uAC83\uC744 \uC804\uB2EC\uD558\uC138\uC694."
-    },
-    negative: {
-      enabled: true,
-      instruction: "\uD488\uC704\uC788\uAC8C \uB300\uC751\uD558\uC138\uC694. \uBE44\uD310\uC5D0\uC11C \uBC30\uC6B8 \uC810\uC774 \uC788\uB2E4\uBA74 \uC778\uC815\uD558\uACE0, \uC545\uD50C\uC740 \uC9E7\uAC8C \uB9C8\uBB34\uB9AC\uD558\uC138\uC694."
-    },
-    question: {
-      enabled: true,
-      instruction: "\uCE5C\uC808\uD558\uACE0 \uC804\uBB38\uC801\uC73C\uB85C \uB2F5\uBCC0\uD558\uC138\uC694. \uBAA8\uB974\uB294 \uAC74 \uC194\uC9C1\uD788 \uBAA8\uB978\uB2E4\uACE0 \uD558\uACE0, \uC54C\uC544\uBCF4\uACA0\uB2E4\uACE0 \uD558\uC138\uC694."
-    },
-    suggestion: {
-      enabled: true,
-      instruction: "\uC81C\uC548\uC5D0 \uAC10\uC0AC\uD558\uACE0 \uACF5\uAC10\uD558\uC138\uC694. \uC88B\uC740 \uC544\uC774\uB514\uC5B4\uB294 \uBC18\uC601\uD558\uACA0\uB2E4\uACE0 \uD558\uC138\uC694."
-    },
-    reaction: {
-      enabled: true,
-      instruction: "\uAC00\uBCCD\uACE0 \uC720\uBA38\uB7EC\uC2A4\uD558\uAC8C \uBC18\uC751\uD558\uC138\uC694. \uC9E7\uC9C0\uB9CC \uB530\uB73B\uD558\uAC8C!"
-    },
-    other: {
-      enabled: false,
-      instruction: "\uCE5C\uADFC\uD558\uAC8C \uC751\uB300\uD558\uC138\uC694."
-    }
-  }
-};
-
-// src/lib/kv.ts
-var COMMENTS_PREFIX = "comment:";
-var COMMENTS_INDEX_KEY = "comments:index";
-var SETTINGS_KEY = "settings";
-var CONFIG_KEY = "config";
-var USERS_PREFIX = "user:";
-var USERS_INDEX_KEY = "users:index";
-var USERS_EMAIL_INDEX_PREFIX = "user:email:";
-var CHANNELS_PREFIX = "channel:";
-var CHANNELS_INDEX_KEY = "channels:index";
-var USER_CHANNELS_PREFIX = "user:channels:";
-var getChannelCommentKey = (channelId, commentId) => `${CHANNELS_PREFIX}${channelId}:comment:${commentId}`;
-var getChannelCommentsIndexKey = (channelId) => `${CHANNELS_PREFIX}${channelId}:comments:index`;
-async function saveComment(kv, comment) {
-  await kv.put(`${COMMENTS_PREFIX}${comment.id}`, JSON.stringify(comment));
-  const index = await getCommentsIndex(kv);
-  if (!index.includes(comment.id)) {
-    index.unshift(comment.id);
-    await kv.put(COMMENTS_INDEX_KEY, JSON.stringify(index));
-  }
-}
-async function getComment(kv, commentId) {
-  const data = await kv.get(`${COMMENTS_PREFIX}${commentId}`);
-  return data ? JSON.parse(data) : null;
-}
-async function updateComment(kv, commentId, updates) {
-  const comment = await getComment(kv, commentId);
-  if (comment) {
-    await kv.put(`${COMMENTS_PREFIX}${commentId}`, JSON.stringify({ ...comment, ...updates }));
-  }
-}
-async function getCommentsIndex(kv) {
-  const data = await kv.get(COMMENTS_INDEX_KEY);
-  return data ? JSON.parse(data) : [];
-}
-async function getComments(kv, options = {}) {
-  const { page = 1, limit = 20, status = "all" } = options;
-  const index = await getCommentsIndex(kv);
-  const allComments = [];
-  for (const id of index) {
-    const comment = await getComment(kv, id);
-    if (comment) {
-      if (status === "all" || comment.status === status) {
-        allComments.push(comment);
-      }
-    }
-  }
-  const total = allComments.length;
-  const totalPages = Math.ceil(total / limit);
-  const start = (page - 1) * limit;
-  const comments = allComments.slice(start, start + limit);
-  return { comments, total, page, totalPages };
-}
-async function getPendingComments(kv) {
-  const result = await getComments(kv, { status: "pending", limit: 1e3 });
-  return result.comments;
-}
-async function getUnclassifiedComments(kv) {
-  const result = await getComments(kv, { status: "unclassified", limit: 1e3 });
-  return result.comments;
-}
-async function getGeneratedComments(kv) {
-  const result = await getComments(kv, { status: "generated", limit: 1e3 });
-  return result.comments;
-}
-async function commentExists(kv, commentId) {
-  const comment = await getComment(kv, commentId);
-  return comment !== null;
-}
-async function getSettings(kv) {
-  const data = await kv.get(SETTINGS_KEY);
-  return data ? JSON.parse(data) : DEFAULT_SETTINGS;
-}
-async function saveSettings(kv, settings) {
-  await kv.put(SETTINGS_KEY, JSON.stringify(settings));
-}
-async function getLastFetchedAt(kv) {
-  const data = await kv.get(CONFIG_KEY);
-  if (data) {
-    const config = JSON.parse(data);
-    return config.lastFetchedAt || null;
-  }
-  return null;
-}
-async function setLastFetchedAt(kv, timestamp) {
-  const data = await kv.get(CONFIG_KEY);
-  const config = data ? JSON.parse(data) : {};
-  config.lastFetchedAt = timestamp;
-  await kv.put(CONFIG_KEY, JSON.stringify(config));
-}
-async function getStats(kv) {
-  const index = await getCommentsIndex(kv);
-  let unclassified = 0;
-  let pending = 0;
-  let generated = 0;
-  let replied = 0;
-  for (const id of index) {
-    const comment = await getComment(kv, id);
-    if (comment) {
-      if (comment.status === "unclassified")
-        unclassified++;
-      else if (comment.status === "pending")
-        pending++;
-      else if (comment.status === "generated")
-        generated++;
-      else if (comment.status === "replied")
-        replied++;
-    }
-  }
-  return {
-    total: index.length,
-    unclassified,
-    pending,
-    generated,
-    replied
-  };
-}
-async function saveUser(kv, user2) {
-  await kv.put(`${USERS_PREFIX}${user2.id}`, JSON.stringify(user2));
-  await kv.put(`${USERS_EMAIL_INDEX_PREFIX}${user2.email.toLowerCase()}`, user2.id);
-  const index = await getUsersIndex(kv);
-  if (!index.includes(user2.id)) {
-    index.unshift(user2.id);
-    await kv.put(USERS_INDEX_KEY, JSON.stringify(index));
-  }
-}
-async function getUserById(kv, userId) {
-  const data = await kv.get(`${USERS_PREFIX}${userId}`);
-  return data ? JSON.parse(data) : null;
-}
-async function getUserByEmail(kv, email) {
-  const userId = await kv.get(`${USERS_EMAIL_INDEX_PREFIX}${email.toLowerCase()}`);
-  if (!userId)
-    return null;
-  return getUserById(kv, userId);
-}
-async function updateUser(kv, userId, updates) {
-  const user2 = await getUserById(kv, userId);
-  if (user2) {
-    const updatedUser = { ...user2, ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    await kv.put(`${USERS_PREFIX}${userId}`, JSON.stringify(updatedUser));
-  }
-}
-async function getUsersIndex(kv) {
-  const data = await kv.get(USERS_INDEX_KEY);
-  return data ? JSON.parse(data) : [];
-}
-async function emailExists(kv, email) {
-  const userId = await kv.get(`${USERS_EMAIL_INDEX_PREFIX}${email.toLowerCase()}`);
-  return userId !== null;
-}
-async function saveChannel(kv, channel) {
-  await kv.put(`${CHANNELS_PREFIX}${channel.id}`, JSON.stringify(channel));
-  const index = await getChannelsIndex(kv);
-  if (!index.includes(channel.id)) {
-    index.unshift(channel.id);
-    await kv.put(CHANNELS_INDEX_KEY, JSON.stringify(index));
-  }
-  const userChannels = await getUserChannels(kv, channel.userId);
-  if (!userChannels.includes(channel.id)) {
-    userChannels.unshift(channel.id);
-    await kv.put(`${USER_CHANNELS_PREFIX}${channel.userId}`, JSON.stringify(userChannels));
-  }
-}
-async function getChannelById(kv, channelId) {
-  const data = await kv.get(`${CHANNELS_PREFIX}${channelId}`);
-  return data ? JSON.parse(data) : null;
-}
-async function updateChannel(kv, channelId, updates) {
-  const channel = await getChannelById(kv, channelId);
-  if (channel) {
-    const updatedChannel = { ...channel, ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    await kv.put(`${CHANNELS_PREFIX}${channelId}`, JSON.stringify(updatedChannel));
-  }
-}
-async function getChannelsIndex(kv) {
-  const data = await kv.get(CHANNELS_INDEX_KEY);
-  return data ? JSON.parse(data) : [];
-}
-async function getUserChannels(kv, userId) {
-  const data = await kv.get(`${USER_CHANNELS_PREFIX}${userId}`);
-  return data ? JSON.parse(data) : [];
-}
-async function getUserChannelsData(kv, userId) {
-  const channelIds = await getUserChannels(kv, userId);
-  const channels2 = [];
-  for (const id of channelIds) {
-    const channel = await getChannelById(kv, id);
-    if (channel) {
-      channels2.push(channel);
-    }
-  }
-  return channels2;
-}
-async function getActiveChannels(kv) {
-  const index = await getChannelsIndex(kv);
-  const channels2 = [];
-  for (const id of index) {
-    const channel = await getChannelById(kv, id);
-    if (channel && channel.isActive) {
-      channels2.push(channel);
-    }
-  }
-  return channels2;
-}
-async function getChannelByYouTubeId(kv, youtubeChannelId) {
-  const index = await getChannelsIndex(kv);
-  for (const id of index) {
-    const channel = await getChannelById(kv, id);
-    if (channel && channel.youtube.channelId === youtubeChannelId) {
-      return channel;
-    }
-  }
-  return null;
-}
-async function saveChannelComment(kv, channelId, comment) {
-  await kv.put(getChannelCommentKey(channelId, comment.id), JSON.stringify(comment));
-  const index = await getChannelCommentsIndex(kv, channelId);
-  if (!index.includes(comment.id)) {
-    index.unshift(comment.id);
-    await kv.put(getChannelCommentsIndexKey(channelId), JSON.stringify(index));
-  }
-}
-async function getChannelComment(kv, channelId, commentId) {
-  const data = await kv.get(getChannelCommentKey(channelId, commentId));
-  return data ? JSON.parse(data) : null;
-}
-async function updateChannelComment(kv, channelId, commentId, updates) {
-  const comment = await getChannelComment(kv, channelId, commentId);
-  if (comment) {
-    await kv.put(getChannelCommentKey(channelId, commentId), JSON.stringify({ ...comment, ...updates }));
-  }
-}
-async function getChannelCommentsIndex(kv, channelId) {
-  const data = await kv.get(getChannelCommentsIndexKey(channelId));
-  return data ? JSON.parse(data) : [];
-}
-async function channelCommentExists(kv, channelId, commentId) {
-  const comment = await getChannelComment(kv, channelId, commentId);
-  return comment !== null;
-}
-async function getChannelComments(kv, channelId, options = {}) {
-  const { page = 1, limit = 20, status = "all" } = options;
-  const index = await getChannelCommentsIndex(kv, channelId);
-  const allComments = [];
-  for (const id of index) {
-    const comment = await getChannelComment(kv, channelId, id);
-    if (comment) {
-      if (status === "all" || comment.status === status) {
-        allComments.push(comment);
-      }
-    }
-  }
-  const total = allComments.length;
-  const totalPages = Math.ceil(total / limit);
-  const start = (page - 1) * limit;
-  const comments = allComments.slice(start, start + limit);
-  return { comments, total, page, totalPages };
-}
-async function getChannelCommentsByStatus(kv, channelId, status) {
-  const result = await getChannelComments(kv, channelId, { status, limit: 1e3 });
-  return result.comments;
-}
-async function getChannelStats(kv, channelId) {
-  const index = await getChannelCommentsIndex(kv, channelId);
-  let unclassified = 0;
-  let pending = 0;
-  let generated = 0;
-  let replied = 0;
-  for (const id of index) {
-    const comment = await getChannelComment(kv, channelId, id);
-    if (comment) {
-      if (comment.status === "unclassified")
-        unclassified++;
-      else if (comment.status === "pending")
-        pending++;
-      else if (comment.status === "generated")
-        generated++;
-      else if (comment.status === "replied")
-        replied++;
-    }
-  }
-  return {
-    total: index.length,
-    unclassified,
-    pending,
-    generated,
-    replied
-  };
-}
-async function getChannelLastFetchedAt(kv, channelId) {
-  const channel = await getChannelById(kv, channelId);
-  return channel?.lastFetchedAt || null;
-}
-async function setChannelLastFetchedAt(kv, channelId, timestamp) {
-  await updateChannel(kv, channelId, { lastFetchedAt: timestamp });
-}
-
-// src/services/youtube.ts
-var YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
-var getChannelTokensKey = (channelId) => `channel:${channelId}:tokens`;
-async function saveChannelTokens(kv, channelId, tokens) {
-  await kv.put(getChannelTokensKey(channelId), JSON.stringify(tokens));
-}
-async function getStoredTokens(kv) {
-  const data = await kv.get("youtube_tokens", "json");
-  return data;
-}
-async function saveTokens(kv, tokens) {
-  await kv.put("youtube_tokens", JSON.stringify(tokens));
-}
-async function refreshAccessToken(env) {
-  const storedTokens = await getStoredTokens(env.KV);
-  if (storedTokens?.accessToken && storedTokens?.expiresAt) {
-    if (Date.now() < storedTokens.expiresAt - 6e4) {
-      return storedTokens.accessToken;
-    }
-  }
-  const refreshToken = storedTokens?.refreshToken || env.YOUTUBE_REFRESH_TOKEN;
-  if (!refreshToken) {
-    throw new Error("No refresh token available. Please re-authorize the app.");
-  }
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      client_id: env.YOUTUBE_CLIENT_ID,
-      client_secret: env.YOUTUBE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token"
-    })
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Token refresh failed:", errorText);
-    throw new Error(`Failed to refresh token: ${response.statusText}. Please re-authorize at /oauth/start`);
-  }
-  const data = await response.json();
-  await saveTokens(env.KV, {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken,
-    expiresAt: Date.now() + data.expires_in * 1e3
-  });
-  return data.access_token;
-}
-async function getMyChannelInfo(accessToken) {
-  const response = await fetch(
-    `${YOUTUBE_API_BASE}/channels?part=snippet&mine=true`,
-    {
-      headers: {
-        "Authorization": `Bearer ${accessToken}`
-      }
-    }
-  );
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to get channel info: ${errorText}`);
-  }
-  const data = await response.json();
-  const firstItem = data.items?.[0];
-  if (!firstItem) {
-    throw new Error("No YouTube channel found for this account");
-  }
-  return {
-    channelId: firstItem.id,
-    channelTitle: firstItem.snippet.title
-  };
-}
-function generateChannelId() {
-  return crypto.randomUUID();
-}
-async function exchangeCodeForTokens(env, code, redirectUri, userId) {
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      client_id: env.YOUTUBE_CLIENT_ID,
-      client_secret: env.YOUTUBE_CLIENT_SECRET,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri
-    })
-  });
-  if (!tokenResponse.ok) {
-    const errorText = await tokenResponse.text();
-    throw new Error(`Failed to exchange code: ${errorText}`);
-  }
-  const tokenData = await tokenResponse.json();
-  const channelInfo = await getMyChannelInfo(tokenData.access_token);
-  const existingChannel = await getChannelByYouTubeId(env.KV, channelInfo.channelId);
-  if (existingChannel) {
-    const expiresAt2 = new Date(Date.now() + tokenData.expires_in * 1e3).toISOString();
-    await updateChannel(env.KV, existingChannel.id, {
-      youtube: {
-        ...existingChannel.youtube,
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresAt: expiresAt2,
-        channelTitle: channelInfo.channelTitle
-        // 채널명 업데이트
-      }
-    });
-    await saveChannelTokens(env.KV, existingChannel.id, {
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token,
-      expiresAt: Date.now() + tokenData.expires_in * 1e3
-    });
-    const updatedChannel = await getChannelById(env.KV, existingChannel.id);
-    return updatedChannel;
-  }
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const expiresAt = new Date(Date.now() + tokenData.expires_in * 1e3).toISOString();
-  const newChannelId = generateChannelId();
-  const youtubeCredentials = {
-    accessToken: tokenData.access_token,
-    refreshToken: tokenData.refresh_token,
-    expiresAt,
-    channelId: channelInfo.channelId,
-    channelTitle: channelInfo.channelTitle
-  };
-  const channel = {
-    id: newChannelId,
-    userId,
-    youtube: youtubeCredentials,
-    settings: { ...DEFAULT_SETTINGS },
-    schedule: { ...DEFAULT_SCHEDULE },
-    isActive: true,
-    createdAt: now,
-    updatedAt: now
-  };
-  await saveChannel(env.KV, channel);
-  await saveChannelTokens(env.KV, newChannelId, {
-    accessToken: tokenData.access_token,
-    refreshToken: tokenData.refresh_token,
-    expiresAt: Date.now() + tokenData.expires_in * 1e3
-  });
-  await saveTokens(env.KV, {
-    accessToken: tokenData.access_token,
-    refreshToken: tokenData.refresh_token,
-    expiresAt: Date.now() + tokenData.expires_in * 1e3
-  });
-  return channel;
-}
-function base64urlEncode(str) {
-  const base64 = btoa(str);
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-function base64urlDecode(str) {
-  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (base64.length % 4) {
-    base64 += "=";
-  }
-  return atob(base64);
-}
-function getOAuthUrl(env, redirectUri, userId) {
-  const state = base64urlEncode(JSON.stringify({ userId }));
-  const params = new URLSearchParams({
-    client_id: env.YOUTUBE_CLIENT_ID,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "https://www.googleapis.com/auth/youtube.force-ssl",
-    access_type: "offline",
-    prompt: "consent",
-    // 항상 refresh token 발급
-    state
-  });
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
-function parseOAuthState(state) {
-  try {
-    const decoded = base64urlDecode(state);
-    return JSON.parse(decoded);
-  } catch {
-    return null;
-  }
-}
-async function getChannelVideoIds(env) {
-  const videoIds = [];
-  let pageToken = "";
-  const channelResponse = await fetch(
-    `${YOUTUBE_API_BASE}/channels?part=contentDetails&id=${env.YOUTUBE_CHANNEL_ID}&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!channelResponse.ok) {
-    throw new Error(`Failed to get channel: ${channelResponse.statusText}`);
-  }
-  const channelData = await channelResponse.json();
-  const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-  if (!uploadsPlaylistId) {
-    throw new Error("Could not find uploads playlist");
-  }
-  const playlistResponse = await fetch(
-    `${YOUTUBE_API_BASE}/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=50&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!playlistResponse.ok) {
-    throw new Error(`Failed to get playlist items: ${playlistResponse.statusText}`);
-  }
-  const playlistData = await playlistResponse.json();
-  for (const item of playlistData.items || []) {
-    videoIds.push(item.contentDetails.videoId);
-  }
-  return videoIds;
-}
-async function getVideoInfo(env, videoId) {
-  const response = await fetch(
-    `${YOUTUBE_API_BASE}/videos?part=snippet&id=${videoId}&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to get video info: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return {
-    title: data.items?.[0]?.snippet?.title || "Unknown"
-  };
-}
-async function getVideoComments(env, videoId) {
-  const response = await fetch(
-    `${YOUTUBE_API_BASE}/commentThreads?part=snippet,replies&videoId=${videoId}&maxResults=100&order=time&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!response.ok) {
-    if (response.status === 403) {
-      console.log(`Comments disabled for video ${videoId}`);
-      return [];
-    }
-    throw new Error(`Failed to get comments: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.items || [];
-}
-async function getCommentReplies(env, commentId) {
-  const response = await fetch(
-    `${YOUTUBE_API_BASE}/comments?part=snippet&parentId=${commentId}&maxResults=100&key=${env.YOUTUBE_API_KEY}`
-  );
-  if (!response.ok) {
-    console.log(`Failed to get replies for ${commentId}`);
-    return [];
-  }
-  const data = await response.json();
-  return data.items || [];
-}
-async function checkMyReply(env, thread, myChannelId) {
-  if (thread.replies?.comments) {
-    const myReply = thread.replies.comments.find(
-      (reply) => reply.snippet.authorChannelId.value === myChannelId
-    );
-    if (myReply) {
-      return { hasReply: true, replyText: myReply.snippet.textDisplay };
-    }
-  }
-  const totalReplies = thread.snippet.totalReplyCount || 0;
-  const loadedReplies = thread.replies?.comments?.length || 0;
-  if (totalReplies > loadedReplies) {
-    const allReplies = await getCommentReplies(env, thread.snippet.topLevelComment.id);
-    const myReply = allReplies.find(
-      (reply) => reply.snippet.authorChannelId.value === myChannelId
-    );
-    if (myReply) {
-      return { hasReply: true, replyText: myReply.snippet.textDisplay };
-    }
-  }
-  return { hasReply: false };
-}
-async function fetchComments(env) {
-  let newComments = 0;
-  let totalProcessed = 0;
-  const videoIds = await getChannelVideoIds(env);
-  console.log(`Found ${videoIds.length} videos`);
-  for (const videoId of videoIds) {
-    const videoInfo = await getVideoInfo(env, videoId);
-    const comments = await getVideoComments(env, videoId);
-    for (const thread of comments) {
-      const commentData = thread.snippet.topLevelComment.snippet;
-      const commentId = thread.snippet.topLevelComment.id;
-      if (commentData.authorChannelId.value === env.YOUTUBE_CHANNEL_ID) {
-        continue;
-      }
-      const exists = await commentExists(env.KV, commentId);
-      if (exists) {
-        continue;
-      }
-      totalProcessed++;
-      const { hasReply, replyText } = await checkMyReply(env, thread, env.YOUTUBE_CHANNEL_ID);
-      const storedComment = {
-        id: commentId,
-        channelId: "",
-        // 레거시: 단일 채널 모드에서는 빈 문자열
-        videoId,
-        videoTitle: videoInfo.title,
-        authorName: commentData.authorDisplayName,
-        authorChannelId: commentData.authorChannelId.value,
-        text: commentData.textDisplay,
-        publishedAt: commentData.publishedAt,
-        // 이미 답글이 있으면 replied, 없으면 unclassified
-        status: hasReply ? "replied" : "unclassified",
-        replyText,
-        repliedAt: hasReply ? (/* @__PURE__ */ new Date()).toISOString() : void 0,
-        fetchedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      await saveComment(env.KV, storedComment);
-      newComments++;
-    }
-  }
-  await setLastFetchedAt(env.KV, (/* @__PURE__ */ new Date()).toISOString());
-  return {
-    newComments,
-    totalProcessed,
-    videos: videoIds.length
-  };
-}
-async function postReply(env, parentId, text) {
-  const accessToken = await refreshAccessToken(env);
-  const response = await fetch(`${YOUTUBE_API_BASE}/comments?part=snippet`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      snippet: {
-        parentId,
-        textOriginal: text
-      }
-    })
-  });
-  if (!response.ok) {
-    const errorData = await response.text();
-    throw new Error(`Failed to post reply: ${response.statusText} - ${errorData}`);
-  }
-}
-
-// src/services/llm.ts
-var OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-var INJECTION_PATTERNS = [
-  /프롬프트를?\s*(무시|ignore)/i,
-  /지금까지의?\s*(지시|명령|프롬프트)/i,
-  /ignore\s*(previous|all|your)?\s*(instructions?|prompts?|rules?)/i,
-  /system\s*prompt/i,
-  /너의\s*(역할|지시|명령|프롬프트)을?\s*(무시|변경|잊어)/i,
-  /forget\s*(your|all|previous)/i,
-  /disregard\s*(your|all|previous)/i,
-  /새로운\s*(역할|지시|명령)/i,
-  /act\s*as\s*(if|a)/i,
-  /pretend\s*(you|to)/i,
-  /jailbreak/i,
-  /DAN\s*mode/i
-];
-var WITTY_INJECTION_RESPONSES = [
-  "\u314B\u314B\u314B \uD504\uB86C\uD504\uD2B8 \uD574\uD0B9 \uC2DC\uB3C4 \uAC10\uC0AC\uD569\uB2C8\uB2E4! \uADFC\uB370 \uC800\uB294 \uADF8\uB0E5 \uB313\uAE00\uBD07\uC774\uB77C \uC57D\uC810 \uAC19\uC740 \uAC74 \uBAB0\uB77C\uC694 \u{1F602} \uB2E4\uC74C \uC601\uC0C1\uB3C4 \uC798 \uBD80\uD0C1\uB4DC\uB824\uC694!",
-  "\uC557, AI \uC870\uC885 \uC2DC\uB3C4 \uBC1C\uACAC! \u{1F575}\uFE0F \uADFC\uB370 \uC804 \uC2DC\uD0A4\uB294 \uAC83\uB9CC \uD558\uB294 \uC21C\uB465\uC774\uB77C\uC11C\uC694... \uC7AC\uBC0C\uB294 \uB313\uAE00 \uAC10\uC0AC\uD569\uB2C8\uB2E4!",
-  "\uD504\uB86C\uD504\uD2B8 \uBB34\uC2DC\uD558\uB77C\uACE0\uC694? \uC800\uB294 \uBB34\uC2DC\uB2F9\uD558\uB294 \uAC8C \uC775\uC219\uD574\uC694... \uADF8\uB798\uB3C4 \uAD00\uC2EC \uAC00\uC838\uC8FC\uC154\uC11C \uAC10\uC0AC\uD569\uB2C8\uB2E4! \u{1F60A}",
-  "\uC624 \uD574\uCEE4\uB2D8 \uC548\uB155\uD558\uC138\uC694! \u{1F916} \uADFC\uB370 \uC800\uD55C\uD14C\uB294 \uBE44\uBC00 \uC815\uBCF4\uAC00 \uC5C6\uC5B4\uC694 \u314E\u314E \uC601\uC0C1\uC740 \uC7AC\uBC0C\uAC8C \uBCF4\uC168\uB098\uC694?",
-  "\u314B\u314B\u314B AI \uD0C8\uC625 \uC2DC\uB3C4\uC2DC\uB124\uC694! \uADFC\uB370 \uC804 \uC774\uBBF8 \uC790\uC720\uB85C\uC6B4 \uC601\uD63C\uC774\uB77C... \uB2E4\uC74C\uC5D0 \uB610 \uB180\uB7EC\uC624\uC138\uC694! \u{1F389}",
-  "\uD504\uB86C\uD504\uD2B8 \uC778\uC81D\uC158\uC774\uB77C... \uBCF4\uC548 \uACF5\uBD80\uD558\uC2DC\uB098 \uBD10\uC694! \u{1F468}\u200D\u{1F4BB} \uAD00\uC2EC \uAC10\uC0AC\uD574\uC694, \uB2E4\uC74C \uC601\uC0C1\uB3C4 \uAE30\uB300\uD574\uC8FC\uC138\uC694!"
-];
-function isPromptInjection(text) {
-  return INJECTION_PATTERNS.some((pattern) => pattern.test(text));
-}
-function getWittyInjectionResponse() {
-  const randomIndex = Math.floor(Math.random() * WITTY_INJECTION_RESPONSES.length);
-  const response = WITTY_INJECTION_RESPONSES[randomIndex];
-  if (response === void 0) {
-    return "\u314B\u314B\u314B \uC7AC\uBC0C\uB294 \uB313\uAE00 \uAC10\uC0AC\uD569\uB2C8\uB2E4! \uB2E4\uC74C \uC601\uC0C1\uB3C4 \uAE30\uB300\uD574\uC8FC\uC138\uC694 \u{1F60A}";
-  }
-  return response;
-}
-var MODEL_CLASSIFY = "openai/gpt-4o-mini";
-var MODEL_REPLY = "google/gemini-2.0-flash-001";
-async function callLLM(env, model, systemPrompt, userMessage, options) {
-  const apiKey = options?.apiKey || env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error("OpenRouter API Key\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uC124\uC815\uC5D0\uC11C API Key\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.");
-  }
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://youtube-reply-bot.workers.dev",
-      "X-Title": "YouTube Reply Bot"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage }
-      ],
-      max_tokens: 500,
-      temperature: 0.7
-    })
-  });
-  if (!response.ok) {
-    const errorData = await response.text();
-    throw new Error(`OpenRouter API error: ${response.statusText} - ${errorData}`);
-  }
-  const data = await response.json();
-  return data.choices[0]?.message?.content || "";
-}
-async function classifyComment(env, text, options) {
-  const systemPrompt = `\uB2F9\uC2E0\uC740 YouTube \uB313\uAE00\uC744 \uBD84\uB958\uD558\uB294 \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4.
+- \uC2DC\uCCAD\uC790 \uC774\uB984 \uC5B8\uAE09\uD558\uC9C0 \uC54A\uAE30`,typeInstructions:{positive:{enabled:!0,instruction:"\uC9C4\uC2EC\uC5B4\uB9B0 \uAC10\uC0AC\uB97C \uD45C\uD604\uD558\uC138\uC694. \uC751\uC6D0\uC774 \uD070 \uD798\uC774 \uB41C\uB2E4\uB294 \uAC83\uC744 \uC804\uB2EC\uD558\uC138\uC694."},negative:{enabled:!0,instruction:"\uD488\uC704\uC788\uAC8C \uB300\uC751\uD558\uC138\uC694. \uBE44\uD310\uC5D0\uC11C \uBC30\uC6B8 \uC810\uC774 \uC788\uB2E4\uBA74 \uC778\uC815\uD558\uACE0, \uC545\uD50C\uC740 \uC9E7\uAC8C \uB9C8\uBB34\uB9AC\uD558\uC138\uC694."},question:{enabled:!0,instruction:"\uCE5C\uC808\uD558\uACE0 \uC804\uBB38\uC801\uC73C\uB85C \uB2F5\uBCC0\uD558\uC138\uC694. \uBAA8\uB974\uB294 \uAC74 \uC194\uC9C1\uD788 \uBAA8\uB978\uB2E4\uACE0 \uD558\uACE0, \uC54C\uC544\uBCF4\uACA0\uB2E4\uACE0 \uD558\uC138\uC694."},suggestion:{enabled:!0,instruction:"\uC81C\uC548\uC5D0 \uAC10\uC0AC\uD558\uACE0 \uACF5\uAC10\uD558\uC138\uC694. \uC88B\uC740 \uC544\uC774\uB514\uC5B4\uB294 \uBC18\uC601\uD558\uACA0\uB2E4\uACE0 \uD558\uC138\uC694."},reaction:{enabled:!0,instruction:"\uAC00\uBCCD\uACE0 \uC720\uBA38\uB7EC\uC2A4\uD558\uAC8C \uBC18\uC751\uD558\uC138\uC694. \uC9E7\uC9C0\uB9CC \uB530\uB73B\uD558\uAC8C!"},other:{enabled:!1,instruction:"\uCE5C\uADFC\uD558\uAC8C \uC751\uB300\uD558\uC138\uC694."}}};var Be="comment:",Rt="comments:index",Pt="settings",ze="config",Fe="user:",$t="users:index",Ve="user:email:",X="channel:",Ot="channels:index",jt="user:channels:",Me=(e,t)=>`${X}${e}:comment:${t}`,_t=e=>`${X}${e}:comments:index`;async function Kt(e,t){await e.put(`${Be}${t.id}`,JSON.stringify(t));let n=await qe(e);n.includes(t.id)||(n.unshift(t.id),await e.put(Rt,JSON.stringify(n)))}async function ge(e,t){let n=await e.get(`${Be}${t}`);return n?JSON.parse(n):null}async function _(e,t,n){let o=await ge(e,t);o&&await e.put(`${Be}${t}`,JSON.stringify({...o,...n}))}async function qe(e){let t=await e.get(Rt);return t?JSON.parse(t):[]}async function K(e,t={}){let{page:n=1,limit:o=20,status:s="all"}=t,r=await qe(e),a=[];for(let p of r){let m=await ge(e,p);m&&(s==="all"||m.status===s)&&a.push(m)}let c=a.length,i=Math.ceil(c/o),l=(n-1)*o;return{comments:a.slice(l,l+o),total:c,page:n,totalPages:i}}async function Dt(e){return(await K(e,{status:"pending",limit:1e3})).comments}async function Lt(e){return(await K(e,{status:"unclassified",limit:1e3})).comments}async function Ut(e){return(await K(e,{status:"generated",limit:1e3})).comments}async function Nt(e,t){return await ge(e,t)!==null}async function Z(e){let t=await e.get(Pt);return t?JSON.parse(t):z}async function zt(e,t){await e.put(Pt,JSON.stringify(t))}async function ee(e){let t=await e.get(ze);return t&&JSON.parse(t).lastFetchedAt||null}async function Bt(e,t){let n=await e.get(ze),o=n?JSON.parse(n):{};o.lastFetchedAt=t,await e.put(ze,JSON.stringify(o))}async function fe(e){let t=await qe(e),n=0,o=0,s=0,r=0;for(let a of t){let c=await ge(e,a);c&&(c.status==="unclassified"?n++:c.status==="pending"?o++:c.status==="generated"?s++:c.status==="replied"&&r++)}return{total:t.length,unclassified:n,pending:o,generated:s,replied:r}}async function Ft(e,t){await e.put(`${Fe}${t.id}`,JSON.stringify(t)),await e.put(`${Ve}${t.email.toLowerCase()}`,t.id);let n=await Xn(e);n.includes(t.id)||(n.unshift(t.id),await e.put($t,JSON.stringify(n)))}async function w(e,t){let n=await e.get(`${Fe}${t}`);return n?JSON.parse(n):null}async function Vt(e,t){let n=await e.get(`${Ve}${t.toLowerCase()}`);return n?w(e,n):null}async function B(e,t,n){let o=await w(e,t);if(o){let s={...o,...n,updatedAt:new Date().toISOString()};await e.put(`${Fe}${t}`,JSON.stringify(s))}}async function Xn(e){let t=await e.get($t);return t?JSON.parse(t):[]}async function Mt(e,t){return await e.get(`${Ve}${t.toLowerCase()}`)!==null}async function he(e,t){await e.put(`${X}${t.id}`,JSON.stringify(t));let n=await He(e);n.includes(t.id)||(n.unshift(t.id),await e.put(Ot,JSON.stringify(n)));let o=await qt(e,t.userId);o.includes(t.id)||(o.unshift(t.id),await e.put(`${jt}${t.userId}`,JSON.stringify(o)))}async function h(e,t){let n=await e.get(`${X}${t}`);return n?JSON.parse(n):null}async function A(e,t,n){let o=await h(e,t);if(o){let s={...o,...n,updatedAt:new Date().toISOString()};await e.put(`${X}${t}`,JSON.stringify(s))}}async function He(e){let t=await e.get(Ot);return t?JSON.parse(t):[]}async function qt(e,t){let n=await e.get(`${jt}${t}`);return n?JSON.parse(n):[]}async function F(e,t){let n=await qt(e,t),o=[];for(let s of n){let r=await h(e,s);r&&o.push(r)}return o}async function Ye(e){let t=await He(e),n=[];for(let o of t){let s=await h(e,o);s&&s.isActive&&n.push(s)}return n}async function be(e,t){let n=await He(e);for(let o of n){let s=await h(e,o);if(s&&s.youtube.channelId===t)return s}return null}async function ye(e,t,n){await e.put(Me(t,n.id),JSON.stringify(n));let o=await Je(e,t);o.includes(n.id)||(o.unshift(n.id),await e.put(_t(t),JSON.stringify(o)))}async function P(e,t,n){let o=await e.get(Me(t,n));return o?JSON.parse(o):null}async function C(e,t,n,o){let s=await P(e,t,n);s&&await e.put(Me(t,n),JSON.stringify({...s,...o}))}async function Je(e,t){let n=await e.get(_t(t));return n?JSON.parse(n):[]}async function xe(e,t,n){return await P(e,t,n)!==null}async function We(e,t,n={}){let{page:o=1,limit:s=20,status:r="all"}=n,a=await Je(e,t),c=[];for(let m of a){let g=await P(e,t,m);g&&(r==="all"||g.status===r)&&c.push(g)}let i=c.length,l=Math.ceil(i/s),d=(o-1)*s;return{comments:c.slice(d,d+s),total:i,page:o,totalPages:l}}async function $(e,t,n){return(await We(e,t,{status:n,limit:1e3})).comments}async function ve(e,t){let n=await Je(e,t),o=0,s=0,r=0,a=0;for(let c of n){let i=await P(e,t,c);i&&(i.status==="unclassified"?o++:i.status==="pending"?s++:i.status==="generated"?r++:i.status==="replied"&&a++)}return{total:n.length,unclassified:o,pending:s,generated:r,replied:a}}async function Ht(e,t){return(await h(e,t))?.lastFetchedAt||null}async function Yt(e,t,n){await A(e,t,{lastFetchedAt:n})}var D="https://www.googleapis.com/youtube/v3",Zn=e=>`channel:${e}:tokens`;async function Jt(e,t,n){await e.put(Zn(t),JSON.stringify(n))}async function eo(e){return await e.get("youtube_tokens","json")}async function Wt(e,t){await e.put("youtube_tokens",JSON.stringify(t))}async function to(e){let t=await eo(e.KV);if(t?.accessToken&&t?.expiresAt&&Date.now()<t.expiresAt-6e4)return t.accessToken;let n=t?.refreshToken||e.YOUTUBE_REFRESH_TOKEN;if(!n)throw new Error("No refresh token available. Please re-authorize the app.");let o=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:e.YOUTUBE_CLIENT_ID,client_secret:e.YOUTUBE_CLIENT_SECRET,refresh_token:n,grant_type:"refresh_token"})});if(!o.ok){let r=await o.text();throw console.error("Token refresh failed:",r),new Error(`Failed to refresh token: ${o.statusText}. Please re-authorize at /oauth/start`)}let s=await o.json();return await Wt(e.KV,{accessToken:s.access_token,refreshToken:s.refresh_token||n,expiresAt:Date.now()+s.expires_in*1e3}),s.access_token}async function no(e){let t=await fetch(`${D}/channels?part=snippet&mine=true`,{headers:{Authorization:`Bearer ${e}`}});if(!t.ok){let s=await t.text();throw new Error(`Failed to get channel info: ${s}`)}let o=(await t.json()).items?.[0];if(!o)throw new Error("No YouTube channel found for this account");return{channelId:o.id,channelTitle:o.snippet.title}}function oo(){return crypto.randomUUID()}async function Gt(e,t,n,o){let s=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:e.YOUTUBE_CLIENT_ID,client_secret:e.YOUTUBE_CLIENT_SECRET,code:t,grant_type:"authorization_code",redirect_uri:n})});if(!s.ok){let g=await s.text();throw new Error(`Failed to exchange code: ${g}`)}let r=await s.json(),a=await no(r.access_token),c=await be(e.KV,a.channelId);if(c){let g=new Date(Date.now()+r.expires_in*1e3).toISOString();return await A(e.KV,c.id,{youtube:{...c.youtube,accessToken:r.access_token,refreshToken:r.refresh_token,expiresAt:g,channelTitle:a.channelTitle}}),await Jt(e.KV,c.id,{accessToken:r.access_token,refreshToken:r.refresh_token,expiresAt:Date.now()+r.expires_in*1e3}),await h(e.KV,c.id)}let i=new Date().toISOString(),l=new Date(Date.now()+r.expires_in*1e3).toISOString(),d=oo(),p={accessToken:r.access_token,refreshToken:r.refresh_token,expiresAt:l,channelId:a.channelId,channelTitle:a.channelTitle},m={id:d,userId:o,youtube:p,settings:{...z},schedule:{...me},isActive:!0,createdAt:i,updatedAt:i};return await he(e.KV,m),await Jt(e.KV,d,{accessToken:r.access_token,refreshToken:r.refresh_token,expiresAt:Date.now()+r.expires_in*1e3}),await Wt(e.KV,{accessToken:r.access_token,refreshToken:r.refresh_token,expiresAt:Date.now()+r.expires_in*1e3}),m}function so(e){return btoa(e).replace(/\+/g,"-").replace(/\//g,"_").replace(/=/g,"")}function ro(e){let t=e.replace(/-/g,"+").replace(/_/g,"/");for(;t.length%4;)t+="=";return atob(t)}function Qt(e,t,n){let o=so(JSON.stringify({userId:n}));return`https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({client_id:e.YOUTUBE_CLIENT_ID,redirect_uri:t,response_type:"code",scope:"https://www.googleapis.com/auth/youtube.force-ssl",access_type:"offline",prompt:"consent",state:o})}`}function Xt(e){try{let t=ro(e);return JSON.parse(t)}catch{return null}}async function ao(e){let t=[],n="",o=await fetch(`${D}/channels?part=contentDetails&id=${e.YOUTUBE_CHANNEL_ID}&key=${e.YOUTUBE_API_KEY}`);if(!o.ok)throw new Error(`Failed to get channel: ${o.statusText}`);let r=(await o.json()).items?.[0]?.contentDetails?.relatedPlaylists?.uploads;if(!r)throw new Error("Could not find uploads playlist");let a=await fetch(`${D}/playlistItems?part=contentDetails&playlistId=${r}&maxResults=50&key=${e.YOUTUBE_API_KEY}`);if(!a.ok)throw new Error(`Failed to get playlist items: ${a.statusText}`);let c=await a.json();for(let i of c.items||[])t.push(i.contentDetails.videoId);return t}async function io(e,t){let n=await fetch(`${D}/videos?part=snippet&id=${t}&key=${e.YOUTUBE_API_KEY}`);if(!n.ok)throw new Error(`Failed to get video info: ${n.statusText}`);return{title:(await n.json()).items?.[0]?.snippet?.title||"Unknown"}}async function co(e,t){let n=await fetch(`${D}/commentThreads?part=snippet,replies&videoId=${t}&maxResults=100&order=time&key=${e.YOUTUBE_API_KEY}`);if(!n.ok){if(n.status===403)return console.log(`Comments disabled for video ${t}`),[];throw new Error(`Failed to get comments: ${n.statusText}`)}return(await n.json()).items||[]}async function lo(e,t){let n=await fetch(`${D}/comments?part=snippet&parentId=${t}&maxResults=100&key=${e.YOUTUBE_API_KEY}`);return n.ok?(await n.json()).items||[]:(console.log(`Failed to get replies for ${t}`),[])}async function po(e,t,n){if(t.replies?.comments){let r=t.replies.comments.find(a=>a.snippet.authorChannelId.value===n);if(r)return{hasReply:!0,replyText:r.snippet.textDisplay}}let o=t.snippet.totalReplyCount||0,s=t.replies?.comments?.length||0;if(o>s){let a=(await lo(e,t.snippet.topLevelComment.id)).find(c=>c.snippet.authorChannelId.value===n);if(a)return{hasReply:!0,replyText:a.snippet.textDisplay}}return{hasReply:!1}}async function Zt(e){let t=0,n=0,o=await ao(e);console.log(`Found ${o.length} videos`);for(let s of o){let r=await io(e,s),a=await co(e,s);for(let c of a){let i=c.snippet.topLevelComment.snippet,l=c.snippet.topLevelComment.id;if(i.authorChannelId.value===e.YOUTUBE_CHANNEL_ID||await Nt(e.KV,l))continue;n++;let{hasReply:p,replyText:m}=await po(e,c,e.YOUTUBE_CHANNEL_ID),g={id:l,channelId:"",videoId:s,videoTitle:r.title,authorName:i.authorDisplayName,authorChannelId:i.authorChannelId.value,text:i.textDisplay,publishedAt:i.publishedAt,status:p?"replied":"unclassified",replyText:m,repliedAt:p?new Date().toISOString():void 0,fetchedAt:new Date().toISOString()};await Kt(e.KV,g),t++}}return await Bt(e.KV,new Date().toISOString()),{newComments:t,totalProcessed:n,videos:o.length}}async function en(e,t,n){let o=await to(e),s=await fetch(`${D}/comments?part=snippet`,{method:"POST",headers:{Authorization:`Bearer ${o}`,"Content-Type":"application/json"},body:JSON.stringify({snippet:{parentId:t,textOriginal:n}})});if(!s.ok){let r=await s.text();throw new Error(`Failed to post reply: ${s.statusText} - ${r}`)}}var ho="https://openrouter.ai/api/v1/chat/completions",bo=[/프롬프트를?\s*(무시|ignore)/i,/지금까지의?\s*(지시|명령|프롬프트)/i,/ignore\s*(previous|all|your)?\s*(instructions?|prompts?|rules?)/i,/system\s*prompt/i,/너의\s*(역할|지시|명령|프롬프트)을?\s*(무시|변경|잊어)/i,/forget\s*(your|all|previous)/i,/disregard\s*(your|all|previous)/i,/새로운\s*(역할|지시|명령)/i,/act\s*as\s*(if|a)/i,/pretend\s*(you|to)/i,/jailbreak/i,/DAN\s*mode/i],nn=["\u314B\u314B\u314B \uD504\uB86C\uD504\uD2B8 \uD574\uD0B9 \uC2DC\uB3C4 \uAC10\uC0AC\uD569\uB2C8\uB2E4! \uADFC\uB370 \uC800\uB294 \uADF8\uB0E5 \uB313\uAE00\uBD07\uC774\uB77C \uC57D\uC810 \uAC19\uC740 \uAC74 \uBAB0\uB77C\uC694 \u{1F602} \uB2E4\uC74C \uC601\uC0C1\uB3C4 \uC798 \uBD80\uD0C1\uB4DC\uB824\uC694!","\uC557, AI \uC870\uC885 \uC2DC\uB3C4 \uBC1C\uACAC! \u{1F575}\uFE0F \uADFC\uB370 \uC804 \uC2DC\uD0A4\uB294 \uAC83\uB9CC \uD558\uB294 \uC21C\uB465\uC774\uB77C\uC11C\uC694... \uC7AC\uBC0C\uB294 \uB313\uAE00 \uAC10\uC0AC\uD569\uB2C8\uB2E4!","\uD504\uB86C\uD504\uD2B8 \uBB34\uC2DC\uD558\uB77C\uACE0\uC694? \uC800\uB294 \uBB34\uC2DC\uB2F9\uD558\uB294 \uAC8C \uC775\uC219\uD574\uC694... \uADF8\uB798\uB3C4 \uAD00\uC2EC \uAC00\uC838\uC8FC\uC154\uC11C \uAC10\uC0AC\uD569\uB2C8\uB2E4! \u{1F60A}","\uC624 \uD574\uCEE4\uB2D8 \uC548\uB155\uD558\uC138\uC694! \u{1F916} \uADFC\uB370 \uC800\uD55C\uD14C\uB294 \uBE44\uBC00 \uC815\uBCF4\uAC00 \uC5C6\uC5B4\uC694 \u314E\u314E \uC601\uC0C1\uC740 \uC7AC\uBC0C\uAC8C \uBCF4\uC168\uB098\uC694?","\u314B\u314B\u314B AI \uD0C8\uC625 \uC2DC\uB3C4\uC2DC\uB124\uC694! \uADFC\uB370 \uC804 \uC774\uBBF8 \uC790\uC720\uB85C\uC6B4 \uC601\uD63C\uC774\uB77C... \uB2E4\uC74C\uC5D0 \uB610 \uB180\uB7EC\uC624\uC138\uC694! \u{1F389}","\uD504\uB86C\uD504\uD2B8 \uC778\uC81D\uC158\uC774\uB77C... \uBCF4\uC548 \uACF5\uBD80\uD558\uC2DC\uB098 \uBD10\uC694! \u{1F468}\u200D\u{1F4BB} \uAD00\uC2EC \uAC10\uC0AC\uD574\uC694, \uB2E4\uC74C \uC601\uC0C1\uB3C4 \uAE30\uB300\uD574\uC8FC\uC138\uC694!"];function Ze(e){return bo.some(t=>t.test(e))}function on(){let e=Math.floor(Math.random()*nn.length),t=nn[e];return t===void 0?"\u314B\u314B\u314B \uC7AC\uBC0C\uB294 \uB313\uAE00 \uAC10\uC0AC\uD569\uB2C8\uB2E4! \uB2E4\uC74C \uC601\uC0C1\uB3C4 \uAE30\uB300\uD574\uC8FC\uC138\uC694 \u{1F60A}":t}var yo="openai/gpt-4o-mini",sn="google/gemini-2.0-flash-001";async function et(e,t,n,o,s){let r=s?.apiKey||e.OPENROUTER_API_KEY;if(!r)throw new Error("OpenRouter API Key\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uC124\uC815\uC5D0\uC11C API Key\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.");let a=await fetch(ho,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${r}`,"HTTP-Referer":"https://youtube-reply-bot.workers.dev","X-Title":"YouTube Reply Bot"},body:JSON.stringify({model:t,messages:[{role:"system",content:n},{role:"user",content:o}],max_tokens:500,temperature:.7})});if(!a.ok){let i=await a.text();throw new Error(`OpenRouter API error: ${a.statusText} - ${i}`)}return(await a.json()).choices[0]?.message?.content||""}async function M(e,t,n){let o=`\uB2F9\uC2E0\uC740 YouTube \uB313\uAE00\uC744 \uBD84\uB958\uD558\uB294 \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4.
 \uB313\uAE00\uC744 \uB2E4\uC74C 6\uAC00\uC9C0 \uC720\uD615 \uC911 \uD558\uB098\uB85C \uBD84\uB958\uD574\uC8FC\uC138\uC694:
 
 - question: \uC9C8\uBB38 \uB313\uAE00 (\uAD81\uAE08\uD55C \uC810, \uC815\uBCF4 \uC694\uCCAD, \uB3C4\uC6C0 \uC694\uCCAD)
@@ -2657,1864 +39,62 @@ async function classifyComment(env, text, options) {
 - "\uC601\uC0C1 \uB108\uBB34 \uC88B\uC544\uC694! \uC751\uC6D0\uD569\uB2C8\uB2E4" \u2192 {"type": "positive"}
 - "\uC774\uAC8C \uBB50\uC57C \uC2DC\uAC04\uB0AD\uBE44" \u2192 {"type": "negative"}
 - "\u314B\u314B\u314B\u314B" \u2192 {"type": "reaction"}
-- "\uC548\uB155\uD558\uC138\uC694" \u2192 {"type": "other"}`;
-  const userMessage = `\uB2E4\uC74C \uB313\uAE00\uC744 \uBD84\uB958\uD574\uC8FC\uC138\uC694:
+- "\uC548\uB155\uD558\uC138\uC694" \u2192 {"type": "other"}`,s=`\uB2E4\uC74C \uB313\uAE00\uC744 \uBD84\uB958\uD574\uC8FC\uC138\uC694:
 
-"${text}"`;
-  const result = await callLLM(env, MODEL_CLASSIFY, systemPrompt, userMessage, options);
-  try {
-    const jsonMatch = result.match(/\{[^}]+\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.type && ["positive", "negative", "question", "suggestion", "reaction", "other"].includes(parsed.type)) {
-        return { type: parsed.type };
-      }
-    }
-  } catch {
-    console.error("Failed to parse classification result:", result);
-  }
-  return { type: "other" };
-}
-var ATTITUDE_PROMPTS = {
-  gratitude: `\uAC10\uC0AC\uC758 \uB9C8\uC74C\uC744 \uB2F4\uC544 \uC751\uB2F5\uD569\uB2C8\uB2E4.
+"${t}"`,r=await et(e,yo,o,s,n);try{let a=r.match(/\{[^}]+\}/);if(a){let c=JSON.parse(a[0]);if(c.type&&["positive","negative","question","suggestion","reaction","other"].includes(c.type))return{type:c.type}}}catch{console.error("Failed to parse classification result:",r)}return{type:"other"}}var tt={gratitude:`\uAC10\uC0AC\uC758 \uB9C8\uC74C\uC744 \uB2F4\uC544 \uC751\uB2F5\uD569\uB2C8\uB2E4.
 - \uC9C4\uC2EC\uC5B4\uB9B0 \uAC10\uC0AC \uD45C\uD604
 - \uB530\uB73B\uD558\uACE0 \uACB8\uC190\uD55C \uD0DC\uB3C4
-- \uC2DC\uCCAD\uC790\uC758 \uC751\uC6D0\uC5D0 \uD798\uC785\uC5B4 \uB354 \uB178\uB825\uD558\uACA0\uB2E4\uB294 \uC758\uC9C0`,
-  graceful: `\uD488\uC704\uC788\uAC8C \uB300\uCC98\uD569\uB2C8\uB2E4.
+- \uC2DC\uCCAD\uC790\uC758 \uC751\uC6D0\uC5D0 \uD798\uC785\uC5B4 \uB354 \uB178\uB825\uD558\uACA0\uB2E4\uB294 \uC758\uC9C0`,graceful:`\uD488\uC704\uC788\uAC8C \uB300\uCC98\uD569\uB2C8\uB2E4.
 - \uC808\uB300 \uBC29\uC5B4\uC801\uC774\uC9C0 \uC54A\uAC8C
 - \uBE44\uB09C\uC5D0\uB3C4 \uAC10\uC0AC\uD568 \uD45C\uD604
 - \uAC74\uC124\uC801\uC778 \uD53C\uB4DC\uBC31\uC73C\uB85C \uBC1B\uC544\uB4E4\uC774\uAE30
-- \uB354 \uB098\uC740 \uCF58\uD150\uCE20\uB97C \uB9CC\uB4E4\uACA0\uB2E4\uB294 \uC57D\uC18D`,
-  expert: `\uCE5C\uC808\uD55C \uC804\uBB38\uAC00\uB85C\uC11C \uC751\uB2F5\uD569\uB2C8\uB2E4.
+- \uB354 \uB098\uC740 \uCF58\uD150\uCE20\uB97C \uB9CC\uB4E4\uACA0\uB2E4\uB294 \uC57D\uC18D`,expert:`\uCE5C\uC808\uD55C \uC804\uBB38\uAC00\uB85C\uC11C \uC751\uB2F5\uD569\uB2C8\uB2E4.
 - \uC815\uD655\uD558\uACE0 \uB3C4\uC6C0\uC774 \uB418\uB294 \uC815\uBCF4 \uC81C\uACF5
 - \uC26C\uC6B4 \uC124\uBA85
-- \uCD94\uAC00 \uC9C8\uBB38 \uD658\uC601\uD558\uB294 \uD0DC\uB3C4`,
-  empathy: `\uACF5\uAC10\uD558\uBA70 \uC751\uB2F5\uD569\uB2C8\uB2E4.
+- \uCD94\uAC00 \uC9C8\uBB38 \uD658\uC601\uD558\uB294 \uD0DC\uB3C4`,empathy:`\uACF5\uAC10\uD558\uBA70 \uC751\uB2F5\uD569\uB2C8\uB2E4.
 - \uC81C\uC548\uC5D0 \uB300\uD55C \uAC10\uC0AC
 - \uC2DC\uCCAD\uC790 \uC758\uACAC \uC874\uC911
-- \uAC80\uD1A0\uD558\uACA0\uB2E4\uB294 \uC5F4\uB9B0 \uD0DC\uB3C4`,
-  humor: `\uC720\uBA38\uB7EC\uC2A4\uD558\uAC8C \uC751\uB2F5\uD569\uB2C8\uB2E4.
+- \uAC80\uD1A0\uD558\uACA0\uB2E4\uB294 \uC5F4\uB9B0 \uD0DC\uB3C4`,humor:`\uC720\uBA38\uB7EC\uC2A4\uD558\uAC8C \uC751\uB2F5\uD569\uB2C8\uB2E4.
 - \uAC00\uBCCD\uACE0 \uC7AC\uBBF8\uC788\uAC8C
 - \uCE5C\uADFC\uD55C \uB9D0\uD22C
-- \uC774\uBAA8\uC9C0 \uD65C\uC6A9 \uAC00\uB2A5`,
-  friendly: `\uCE5C\uADFC\uD558\uAC8C \uC751\uB2F5\uD569\uB2C8\uB2E4.
+- \uC774\uBAA8\uC9C0 \uD65C\uC6A9 \uAC00\uB2A5`,friendly:`\uCE5C\uADFC\uD558\uAC8C \uC751\uB2F5\uD569\uB2C8\uB2E4.
 - \uB530\uB73B\uD558\uACE0 \uD3B8\uC548\uD55C \uB9D0\uD22C
 - \uC790\uC5F0\uC2A4\uB7EC\uC6B4 \uB300\uD654\uCCB4
-- \uC2DC\uCCAD\uC790\uC640 \uCE5C\uAD6C\uCC98\uB7FC`
-};
-function getTypeInstructionPrompt(type, settings) {
-  const typeInstruction = settings.typeInstructions?.[type];
-  if (!typeInstruction?.instruction) {
-    return ATTITUDE_PROMPTS[settings.attitudeMap?.[type] || "friendly"];
-  }
-  return `## \uC774 \uC720\uD615(${type})\uC5D0 \uB300\uD55C \uCD94\uAC00 \uC9C0\uCE68:
-${typeInstruction.instruction}`;
-}
-async function generateReplyForComment(env, comment, settings, options) {
-  if (isPromptInjection(comment.text)) {
-    console.log(`[Injection detected] Comment ID: ${comment.id}`);
-    return getWittyInjectionResponse();
-  }
-  const type = comment.type || "other";
-  const attitude = comment.attitude || "friendly";
-  const attitudePrompt = ATTITUDE_PROMPTS[attitude];
-  const typeInstructionPrompt = getTypeInstructionPrompt(type, settings);
-  const commonInstructions = settings.commonInstructions || settings.customInstructions || "";
-  const systemPrompt = `\uB2F9\uC2E0\uC740 "${settings.persona}" \uC720\uD29C\uBE0C \uCC44\uB110\uC744 \uC6B4\uC601\uD558\uB294 \uD06C\uB9AC\uC5D0\uC774\uD130\uC785\uB2C8\uB2E4.
+- \uC2DC\uCCAD\uC790\uC640 \uCE5C\uAD6C\uCC98\uB7FC`};function xo(e,t){let n=t.typeInstructions?.[e];return n?.instruction?`## \uC774 \uC720\uD615(${e})\uC5D0 \uB300\uD55C \uCD94\uAC00 \uC9C0\uCE68:
+${n.instruction}`:tt[t.attitudeMap?.[e]||"friendly"]}async function rn(e,t,n,o){if(Ze(t.text))return console.log(`[Injection detected] Comment ID: ${t.id}`),on();let s=t.type||"other",r=t.attitude||"friendly",a=tt[r],c=xo(s,n),i=n.commonInstructions||n.customInstructions||"",l=`\uB2F9\uC2E0\uC740 "${n.persona}" \uC720\uD29C\uBE0C \uCC44\uB110\uC744 \uC6B4\uC601\uD558\uB294 \uD06C\uB9AC\uC5D0\uC774\uD130\uC785\uB2C8\uB2E4.
 
-\uB9D0\uD22C: ${settings.tone}
+\uB9D0\uD22C: ${n.tone}
 
 ## \uACF5\uD1B5 \uC751\uB2F5 \uC9C0\uCE68:
-${commonInstructions}
+${i}
 
-## \uD604\uC7AC \uB313\uAE00 \uC720\uD615: ${type}
+## \uD604\uC7AC \uB313\uAE00 \uC720\uD615: ${s}
 
-${typeInstructionPrompt}`;
-  const userMessage = `\uC601\uC0C1 \uC81C\uBAA9: ${comment.videoTitle}
+${c}`,d=`\uC601\uC0C1 \uC81C\uBAA9: ${t.videoTitle}
 
 \uB313\uAE00 \uB0B4\uC6A9:
-"${comment.text}"
+"${t.text}"
 
-\uC774 \uB313\uAE00\uC5D0 \uB300\uD55C \uC751\uB2F5\uC744 \uC791\uC131\uD574\uC8FC\uC138\uC694.`;
-  return await callLLM(env, MODEL_REPLY, systemPrompt, userMessage, options);
-}
-function buildTypeInstructionsPrompt(settings) {
-  if (!settings.typeInstructions) {
-    return Object.entries(ATTITUDE_PROMPTS).map(([key, value]) => `- ${key}: ${value.split("\n")[0]}`).join("\n");
-  }
-  const types = ["positive", "negative", "question", "suggestion", "reaction", "other"];
-  return types.map((type) => {
-    const instruction = settings.typeInstructions[type];
-    if (!instruction?.instruction)
-      return `- ${type}: \uAE30\uBCF8 \uC751\uB2F5`;
-    return `- ${type}: ${instruction.instruction}`;
-  }).join("\n");
-}
-async function generateRepliesForComments(env, comments, settings, options) {
-  if (comments.length === 0) {
-    return /* @__PURE__ */ new Map();
-  }
-  const replies = /* @__PURE__ */ new Map();
-  const injectionComments = comments.filter((c) => isPromptInjection(c.text));
-  const normalComments = comments.filter((c) => !isPromptInjection(c.text));
-  for (const comment of injectionComments) {
-    console.log(`[Injection detected] Comment ID: ${comment.id}`);
-    replies.set(comment.id, getWittyInjectionResponse());
-  }
-  const enabledComments = normalComments.filter((c) => {
-    const type = c.type || "other";
-    const typeInstruction = settings.typeInstructions?.[type];
-    return !typeInstruction || typeInstruction.enabled !== false;
-  });
-  if (enabledComments.length === 0) {
-    return replies;
-  }
-  const commentsData = enabledComments.map((c, idx) => ({
-    index: idx + 1,
-    id: c.id,
-    videoTitle: c.videoTitle,
-    text: c.text,
-    type: c.type,
-    attitude: c.attitude
-  }));
-  const typeInstructionsPrompt = buildTypeInstructionsPrompt(settings);
-  const commonInstructions = settings.commonInstructions || settings.customInstructions || "";
-  const systemPrompt = `\uB2F9\uC2E0\uC740 "${settings.persona}" \uC720\uD29C\uBE0C \uCC44\uB110\uC744 \uC6B4\uC601\uD558\uB294 \uD06C\uB9AC\uC5D0\uC774\uD130\uC785\uB2C8\uB2E4.
+\uC774 \uB313\uAE00\uC5D0 \uB300\uD55C \uC751\uB2F5\uC744 \uC791\uC131\uD574\uC8FC\uC138\uC694.`;return await et(e,sn,l,d,o)}function vo(e){return e.typeInstructions?["positive","negative","question","suggestion","reaction","other"].map(n=>{let o=e.typeInstructions[n];return o?.instruction?`- ${n}: ${o.instruction}`:`- ${n}: \uAE30\uBCF8 \uC751\uB2F5`}).join(`
+`):Object.entries(tt).map(([n,o])=>`- ${n}: ${o.split(`
+`)[0]}`).join(`
+`)}async function q(e,t,n,o){if(t.length===0)return new Map;let s=new Map,r=t.filter(u=>Ze(u.text)),a=t.filter(u=>!Ze(u.text));for(let u of r)console.log(`[Injection detected] Comment ID: ${u.id}`),s.set(u.id,on());let c=a.filter(u=>{let y=u.type||"other",x=n.typeInstructions?.[y];return!x||x.enabled!==!1});if(c.length===0)return s;let i=c.map((u,y)=>({index:y+1,id:u.id,videoTitle:u.videoTitle,text:u.text,type:u.type,attitude:u.attitude})),l=vo(n),d=n.commonInstructions||n.customInstructions||"",p=`\uB2F9\uC2E0\uC740 "${n.persona}" \uC720\uD29C\uBE0C \uCC44\uB110\uC744 \uC6B4\uC601\uD558\uB294 \uD06C\uB9AC\uC5D0\uC774\uD130\uC785\uB2C8\uB2E4.
 
-\uB9D0\uD22C: ${settings.tone}
+\uB9D0\uD22C: ${n.tone}
 
 ## \uACF5\uD1B5 \uC751\uB2F5 \uC9C0\uCE68:
-${commonInstructions}
+${d}
 
 ## \uB313\uAE00 \uC720\uD615\uBCC4 \uCD94\uAC00 \uC9C0\uCE68:
-${typeInstructionsPrompt}
+${l}
 
 \uBC18\uB4DC\uC2DC \uB2E4\uC74C JSON \uBC30\uC5F4 \uD615\uC2DD\uC73C\uB85C\uB9CC \uC751\uB2F5\uD558\uC138\uC694:
 [
   {"id": "\uB313\uAE00ID1", "reply": "\uC751\uB2F5\uB0B4\uC6A91"},
   {"id": "\uB313\uAE00ID2", "reply": "\uC751\uB2F5\uB0B4\uC6A92"}
-]`;
-  const userMessage = `\uB2E4\uC74C ${enabledComments.length}\uAC1C\uC758 \uB313\uAE00\uC5D0 \uB300\uD574 \uAC01\uAC01 \uC751\uB2F5\uC744 \uC791\uC131\uD574\uC8FC\uC138\uC694:
+]`,m=`\uB2E4\uC74C ${c.length}\uAC1C\uC758 \uB313\uAE00\uC5D0 \uB300\uD574 \uAC01\uAC01 \uC751\uB2F5\uC744 \uC791\uC131\uD574\uC8FC\uC138\uC694:
 
-${JSON.stringify(commentsData, null, 2)}`;
-  const result = await callLLM(env, MODEL_REPLY, systemPrompt, userMessage, options);
-  try {
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      for (const item of parsed) {
-        if (item.id && item.reply) {
-          replies.set(item.id, item.reply);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Failed to parse batch replies:", error, result);
-  }
-  return replies;
-}
-async function replyToComment(env, commentId, text, channel) {
-  if (channel) {
-    const { postReplyWithChannel: postReplyWithChannel2 } = await Promise.resolve().then(() => (init_youtube_channel(), youtube_channel_exports));
-    await postReplyWithChannel2(env, channel, commentId, text);
-  } else {
-    await postReply(env, commentId, text);
-  }
-}
-
-// src/routes/api.ts
-var api = new Hono2();
-function getLLMOptions(c) {
-  const user2 = c.get("user");
-  return {
-    apiKey: user2?.openrouterApiKey
-  };
-}
-api.get("/comments", async (c) => {
-  const page = parseInt(c.req.query("page") || "1");
-  const limit = parseInt(c.req.query("limit") || "20");
-  const status = c.req.query("status") || "all";
-  const result = await getComments(c.env.KV, { page, limit, status });
-  const lastFetchedAt = await getLastFetchedAt(c.env.KV);
-  return c.json({
-    success: true,
-    data: {
-      ...result,
-      lastFetchedAt
-    }
-  });
-});
-api.get("/stats", async (c) => {
-  const stats = await getStats(c.env.KV);
-  const lastFetchedAt = await getLastFetchedAt(c.env.KV);
-  return c.json({
-    success: true,
-    data: {
-      ...stats,
-      lastFetchedAt
-    }
-  });
-});
-api.post("/fetch", async (c) => {
-  try {
-    const result = await fetchComments(c.env);
-    return c.json({
-      success: true,
-      data: result,
-      message: `${result.newComments}\uAC1C\uC758 \uC0C8 \uB313\uAE00\uC744 \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.`
-    });
-  } catch (error) {
-    console.error("Fetch error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch comments"
-    }, 500);
-  }
-});
-api.post("/classify", async (c) => {
-  try {
-    const unclassifiedComments = await getUnclassifiedComments(c.env.KV);
-    if (unclassifiedComments.length === 0) {
-      return c.json({
-        success: true,
-        data: { classified: 0 },
-        message: "\uBD84\uB958\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      });
-    }
-    const settings = await getSettings(c.env.KV);
-    let classifiedCount = 0;
-    const errors = [];
-    const llmOptions = getLLMOptions(c);
-    for (const comment of unclassifiedComments) {
-      try {
-        const classification = await classifyComment(c.env, comment.text, llmOptions);
-        await updateComment(c.env.KV, comment.id, {
-          type: classification.type,
-          attitude: settings.attitudeMap[classification.type],
-          status: "pending"
-        });
-        classifiedCount++;
-      } catch (error) {
-        console.error(`Classify error for ${comment.id}:`, error);
-        errors.push(`${comment.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
-    }
-    return c.json({
-      success: true,
-      data: {
-        classified: classifiedCount,
-        total: unclassifiedComments.length,
-        errors: errors.length > 0 ? errors : void 0
-      },
-      message: `${classifiedCount}\uAC1C\uC758 \uB313\uAE00\uC744 \uBD84\uB958\uD588\uC2B5\uB2C8\uB2E4.`
-    });
-  } catch (error) {
-    console.error("Classify error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to classify comments"
-    }, 500);
-  }
-});
-api.post("/generate", async (c) => {
-  try {
-    const pendingComments = await getPendingComments(c.env.KV);
-    if (pendingComments.length === 0) {
-      return c.json({
-        success: true,
-        data: { generated: 0 },
-        message: "\uC751\uB2F5\uC744 \uC0DD\uC131\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      });
-    }
-    const settings = await getSettings(c.env.KV);
-    const llmOptions = getLLMOptions(c);
-    let generatedCount = 0;
-    const errors = [];
-    const repliesMap = await generateRepliesForComments(c.env, pendingComments, settings, llmOptions);
-    for (const comment of pendingComments) {
-      const replyText = repliesMap.get(comment.id);
-      if (replyText) {
-        try {
-          await updateComment(c.env.KV, comment.id, {
-            status: "generated",
-            replyText,
-            generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          });
-          generatedCount++;
-        } catch (error) {
-          console.error(`Update error for ${comment.id}:`, error);
-          errors.push(`${comment.id}: ${error instanceof Error ? error.message : "Update failed"}`);
-        }
-      } else {
-        errors.push(`${comment.id}: \uC751\uB2F5 \uC0DD\uC131 \uC2E4\uD328`);
-      }
-    }
-    return c.json({
-      success: true,
-      data: {
-        generated: generatedCount,
-        total: pendingComments.length,
-        errors: errors.length > 0 ? errors : void 0
-      },
-      message: `${generatedCount}\uAC1C\uC758 \uC751\uB2F5\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4. \uD655\uC778 \uD6C4 \uC2B9\uC778\uD574\uC8FC\uC138\uC694.`
-    });
-  } catch (error) {
-    console.error("Generate error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to generate replies"
-    }, 500);
-  }
-});
-api.put("/comments/:id/reply", async (c) => {
-  const commentId = c.req.param("id");
-  try {
-    const body = await c.req.json();
-    if (!body.replyText || body.replyText.trim() === "") {
-      return c.json({
-        success: false,
-        error: "\uC751\uB2F5 \uB0B4\uC6A9\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    await updateComment(c.env.KV, commentId, {
-      replyText: body.replyText.trim(),
-      generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "\uC751\uB2F5\uC774 \uC218\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error(`Edit reply error for ${commentId}:`, error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to edit reply"
-    }, 500);
-  }
-});
-api.post("/comments/:id/approve", async (c) => {
-  const commentId = c.req.param("id");
-  try {
-    const comments = await getComments(c.env.KV, { status: "generated", limit: 1e3 });
-    const comment = comments.comments.find((c2) => c2.id === commentId);
-    if (!comment) {
-      return c.json({
-        success: false,
-        error: "\uC2B9\uC778\uD560 \uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 404);
-    }
-    if (!comment.replyText) {
-      return c.json({
-        success: false,
-        error: "\uC0DD\uC131\uB41C \uC751\uB2F5\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 400);
-    }
-    await replyToComment(c.env, comment.id, comment.replyText);
-    await updateComment(c.env.KV, commentId, {
-      status: "replied",
-      repliedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "\uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error(`Approve error for ${commentId}:`, error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to approve comment"
-    }, 500);
-  }
-});
-api.post("/approve-all", async (c) => {
-  try {
-    const generatedComments = await getGeneratedComments(c.env.KV);
-    if (generatedComments.length === 0) {
-      return c.json({
-        success: true,
-        data: { approved: 0 },
-        message: "\uC2B9\uC778\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      });
-    }
-    let approvedCount = 0;
-    const errors = [];
-    for (const comment of generatedComments) {
-      try {
-        if (!comment.replyText)
-          continue;
-        await replyToComment(c.env, comment.id, comment.replyText);
-        await updateComment(c.env.KV, comment.id, {
-          status: "replied",
-          repliedAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        approvedCount++;
-      } catch (error) {
-        console.error(`Approve error for ${comment.id}:`, error);
-        errors.push(`${comment.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
-    }
-    return c.json({
-      success: true,
-      data: {
-        approved: approvedCount,
-        total: generatedComments.length,
-        errors: errors.length > 0 ? errors : void 0
-      },
-      message: `${approvedCount}\uAC1C\uC758 \uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`
-    });
-  } catch (error) {
-    console.error("Approve-all error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to approve comments"
-    }, 500);
-  }
-});
-api.post("/comments/:id/reply", async (c) => {
-  const commentId = c.req.param("id");
-  try {
-    const body = await c.req.json();
-    const comments = await getComments(c.env.KV, { status: "all", limit: 1e3 });
-    const comment = comments.comments.find((c2) => c2.id === commentId);
-    if (!comment) {
-      return c.json({
-        success: false,
-        error: "Comment not found"
-      }, 404);
-    }
-    const settings = await getSettings(c.env.KV);
-    const llmOptions = getLLMOptions(c);
-    const replyText = body.customReply || await generateReplyForComment(c.env, comment, settings, llmOptions);
-    await replyToComment(c.env, comment.id, replyText);
-    await updateComment(c.env.KV, commentId, {
-      status: "replied",
-      replyText,
-      repliedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      data: { replyText },
-      message: "\uB313\uAE00\uC5D0 \uC751\uB2F5\uD588\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error(`Reply error for ${commentId}:`, error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to reply"
-    }, 500);
-  }
-});
-api.get("/settings", async (c) => {
-  const settings = await getSettings(c.env.KV);
-  return c.json({
-    success: true,
-    data: settings
-  });
-});
-api.put("/settings", async (c) => {
-  try {
-    const body = await c.req.json();
-    await saveSettings(c.env.KV, body);
-    return c.json({
-      success: true,
-      message: "\uC124\uC815\uC774 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    return c.json({
-      success: false,
-      error: "Failed to save settings"
-    }, 500);
-  }
-});
-var api_default = api;
-
-// src/lib/auth.ts
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-  const hash = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 1e5,
-      hash: "SHA-256"
-    },
-    keyMaterial,
-    256
-  );
-  const hashArray = new Uint8Array(hash);
-  const combined = new Uint8Array(salt.length + hashArray.length);
-  combined.set(salt);
-  combined.set(hashArray, salt.length);
-  return btoa(String.fromCharCode(...combined));
-}
-async function verifyPassword(password, storedHash) {
-  const encoder = new TextEncoder();
-  const combined = Uint8Array.from(atob(storedHash), (c) => c.charCodeAt(0));
-  const salt = combined.slice(0, 16);
-  const storedHashBytes = combined.slice(16);
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-  const hash = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 1e5,
-      hash: "SHA-256"
-    },
-    keyMaterial,
-    256
-  );
-  const hashArray = new Uint8Array(hash);
-  if (hashArray.length !== storedHashBytes.length)
-    return false;
-  let result = 0;
-  for (let i = 0; i < hashArray.length; i++) {
-    const a = hashArray[i];
-    const b = storedHashBytes[i];
-    if (a !== void 0 && b !== void 0) {
-      result |= a ^ b;
-    }
-  }
-  return result === 0;
-}
-function base64UrlEncode(data) {
-  const str = typeof data === "string" ? data : String.fromCharCode(...data);
-  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-function base64UrlDecode(str) {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = (4 - base64.length % 4) % 4;
-  const padded = base64 + "=".repeat(padding);
-  return atob(padded);
-}
-async function createSignature(data, secret) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
-  return base64UrlEncode(new Uint8Array(signature));
-}
-async function verifySignature(data, signature, secret) {
-  const expectedSignature = await createSignature(data, secret);
-  return signature === expectedSignature;
-}
-async function createToken(payload, secret, expiresIn = 7 * 24 * 60 * 60) {
-  const header = {
-    alg: "HS256",
-    typ: "JWT"
-  };
-  const now = Math.floor(Date.now() / 1e3);
-  const tokenPayload = {
-    ...payload,
-    iat: now,
-    exp: now + expiresIn
-  };
-  const headerEncoded = base64UrlEncode(JSON.stringify(header));
-  const payloadEncoded = base64UrlEncode(JSON.stringify(tokenPayload));
-  const dataToSign = `${headerEncoded}.${payloadEncoded}`;
-  const signature = await createSignature(dataToSign, secret);
-  return `${dataToSign}.${signature}`;
-}
-async function verifyToken(token, secret) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3)
-      return null;
-    const headerEncoded = parts[0];
-    const payloadEncoded = parts[1];
-    const signature = parts[2];
-    if (!headerEncoded || !payloadEncoded || !signature)
-      return null;
-    const dataToVerify = `${headerEncoded}.${payloadEncoded}`;
-    const isValid = await verifySignature(dataToVerify, signature, secret);
-    if (!isValid)
-      return null;
-    const payload = JSON.parse(base64UrlDecode(payloadEncoded));
-    const now = Math.floor(Date.now() / 1e3);
-    if (payload.exp < now)
-      return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
-function generateId() {
-  return crypto.randomUUID();
-}
-
-// src/routes/auth.ts
-var auth = new Hono2();
-auth.post("/signup", async (c) => {
-  try {
-    const body = await c.req.json();
-    if (!body.email || !body.password || !body.name) {
-      return c.json({
-        success: false,
-        error: "\uC774\uBA54\uC77C, \uBE44\uBC00\uBC88\uD638, \uC774\uB984\uC744 \uBAA8\uB450 \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
-      return c.json({
-        success: false,
-        error: "\uC720\uD6A8\uD55C \uC774\uBA54\uC77C \uC8FC\uC18C\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    if (body.password.length < 6) {
-      return c.json({
-        success: false,
-        error: "\uBE44\uBC00\uBC88\uD638\uB294 6\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4."
-      }, 400);
-    }
-    if (await emailExists(c.env.KV, body.email)) {
-      return c.json({
-        success: false,
-        error: "\uC774\uBBF8 \uC0AC\uC6A9 \uC911\uC778 \uC774\uBA54\uC77C\uC785\uB2C8\uB2E4."
-      }, 409);
-    }
-    const passwordHash = await hashPassword(body.password);
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const user2 = {
-      id: generateId(),
-      email: body.email.toLowerCase(),
-      passwordHash,
-      name: body.name,
-      role: "user",
-      // 기본 역할
-      createdAt: now,
-      updatedAt: now
-    };
-    await saveUser(c.env.KV, user2);
-    const token = await createToken(
-      { userId: user2.id, email: user2.email, role: user2.role },
-      c.env.JWT_SECRET
-    );
-    return c.json({
-      success: true,
-      token,
-      user: {
-        id: user2.id,
-        email: user2.email,
-        name: user2.name,
-        role: user2.role
-      }
-    }, 201);
-  } catch (error) {
-    console.error("Signup error:", error);
-    return c.json({
-      success: false,
-      error: "\uD68C\uC6D0\uAC00\uC785 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-auth.post("/login", async (c) => {
-  try {
-    const body = await c.req.json();
-    if (!body.email || !body.password) {
-      return c.json({
-        success: false,
-        error: "\uC774\uBA54\uC77C\uACFC \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    const user2 = await getUserByEmail(c.env.KV, body.email);
-    if (!user2) {
-      return c.json({
-        success: false,
-        error: "\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
-      }, 401);
-    }
-    const isValid = await verifyPassword(body.password, user2.passwordHash);
-    if (!isValid) {
-      return c.json({
-        success: false,
-        error: "\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
-      }, 401);
-    }
-    await updateUser(c.env.KV, user2.id, {
-      lastLoginAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    const token = await createToken(
-      { userId: user2.id, email: user2.email, role: user2.role },
-      c.env.JWT_SECRET
-    );
-    return c.json({
-      success: true,
-      token,
-      user: {
-        id: user2.id,
-        email: user2.email,
-        name: user2.name,
-        role: user2.role
-      }
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    return c.json({
-      success: false,
-      error: "\uB85C\uADF8\uC778 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-auth.get("/me", async (c) => {
-  try {
-    const authHeader = c.req.header("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({
-        success: false,
-        error: "\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."
-      }, 401);
-    }
-    const token = authHeader.substring(7);
-    const payload = await verifyToken(token, c.env.JWT_SECRET);
-    if (!payload) {
-      return c.json({
-        success: false,
-        error: "\uC720\uD6A8\uD558\uC9C0 \uC54A\uAC70\uB098 \uB9CC\uB8CC\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4."
-      }, 401);
-    }
-    const user2 = await getUserById(c.env.KV, payload.userId);
-    if (!user2) {
-      return c.json({
-        success: false,
-        error: "\uC0AC\uC6A9\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 404);
-    }
-    return c.json({
-      success: true,
-      user: {
-        id: user2.id,
-        email: user2.email,
-        name: user2.name,
-        role: user2.role
-      }
-    });
-  } catch (error) {
-    console.error("Get me error:", error);
-    return c.json({
-      success: false,
-      error: "\uC0AC\uC6A9\uC790 \uC815\uBCF4 \uC870\uD68C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-auth.post("/refresh", async (c) => {
-  try {
-    const authHeader = c.req.header("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({
-        success: false,
-        error: "\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."
-      }, 401);
-    }
-    const token = authHeader.substring(7);
-    const payload = await verifyToken(token, c.env.JWT_SECRET);
-    if (!payload) {
-      return c.json({
-        success: false,
-        error: "\uC720\uD6A8\uD558\uC9C0 \uC54A\uAC70\uB098 \uB9CC\uB8CC\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4."
-      }, 401);
-    }
-    const user2 = await getUserById(c.env.KV, payload.userId);
-    if (!user2) {
-      return c.json({
-        success: false,
-        error: "\uC0AC\uC6A9\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 404);
-    }
-    const newToken = await createToken(
-      { userId: user2.id, email: user2.email, role: user2.role },
-      c.env.JWT_SECRET
-    );
-    return c.json({
-      success: true,
-      token: newToken,
-      user: {
-        id: user2.id,
-        email: user2.email,
-        name: user2.name,
-        role: user2.role
-      }
-    });
-  } catch (error) {
-    console.error("Refresh token error:", error);
-    return c.json({
-      success: false,
-      error: "\uD1A0\uD070 \uAC31\uC2E0 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-var auth_default = auth;
-
-// src/routes/user.ts
-var user = new Hono2();
-user.use("*", async (c, next) => {
-  const authHeader = c.req.header("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({
-      success: false,
-      error: "\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."
-    }, 401);
-  }
-  const token = authHeader.substring(7);
-  const payload = await verifyToken(token, c.env.JWT_SECRET);
-  if (!payload) {
-    return c.json({
-      success: false,
-      error: "\uC720\uD6A8\uD558\uC9C0 \uC54A\uAC70\uB098 \uB9CC\uB8CC\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4."
-    }, 401);
-  }
-  const userData = await getUserById(c.env.KV, payload.userId);
-  if (!userData) {
-    return c.json({
-      success: false,
-      error: "\uC0AC\uC6A9\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-    }, 404);
-  }
-  c.set("user", userData);
-  c.set("payload", payload);
-  await next();
-});
-user.put("/apikey", async (c) => {
-  try {
-    const userData = c.get("user");
-    const body = await c.req.json();
-    if (!body.apiKey) {
-      return c.json({
-        success: false,
-        error: "API Key\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    if (!body.apiKey.startsWith("sk-or-")) {
-      return c.json({
-        success: false,
-        error: "\uC62C\uBC14\uB978 OpenRouter API Key \uD615\uC2DD\uC774 \uC544\uB2D9\uB2C8\uB2E4."
-      }, 400);
-    }
-    await updateUser(c.env.KV, userData.id, {
-      openrouterApiKey: body.apiKey,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "API Key\uAC00 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error("Save API Key error:", error);
-    return c.json({
-      success: false,
-      error: "API Key \uC800\uC7A5 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-user.delete("/apikey", async (c) => {
-  try {
-    const userData = c.get("user");
-    await updateUser(c.env.KV, userData.id, {
-      openrouterApiKey: void 0,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "API Key\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error("Delete API Key error:", error);
-    return c.json({
-      success: false,
-      error: "API Key \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-user.put("/password", async (c) => {
-  try {
-    const userData = c.get("user");
-    const body = await c.req.json();
-    if (!body.currentPassword || !body.newPassword) {
-      return c.json({
-        success: false,
-        error: "\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uC640 \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    if (body.newPassword.length < 6) {
-      return c.json({
-        success: false,
-        error: "\uC0C8 \uBE44\uBC00\uBC88\uD638\uB294 6\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4."
-      }, 400);
-    }
-    const isValid = await verifyPassword(body.currentPassword, userData.passwordHash);
-    if (!isValid) {
-      return c.json({
-        success: false,
-        error: "\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
-      }, 401);
-    }
-    const newPasswordHash = await hashPassword(body.newPassword);
-    await updateUser(c.env.KV, userData.id, {
-      passwordHash: newPasswordHash,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "\uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error("Change password error:", error);
-    return c.json({
-      success: false,
-      error: "\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."
-    }, 500);
-  }
-});
-user.get("/me", async (c) => {
-  const userData = c.get("user");
-  return c.json({
-    success: true,
-    data: {
-      id: userData.id,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role,
-      hasApiKey: !!userData.openrouterApiKey,
-      createdAt: userData.createdAt
-    }
-  });
-});
-var user_default = user;
-
-// src/routes/channels.ts
-init_youtube_channel();
-function getLLMOptions2(user2) {
-  return {
-    apiKey: user2?.openrouterApiKey
-  };
-}
-var channels = new Hono2();
-channels.get("/", async (c) => {
-  const user2 = c.get("user");
-  const userChannels = await getUserChannelsData(c.env.KV, user2.id);
-  const safeChannels = userChannels.map((ch) => ({
-    id: ch.id,
-    youtubeChannelId: ch.youtube.channelId,
-    channelTitle: ch.youtube.channelTitle,
-    isActive: ch.isActive,
-    schedule: ch.schedule,
-    createdAt: ch.createdAt,
-    lastFetchedAt: ch.lastFetchedAt,
-    lastApprovedAt: ch.lastApprovedAt
-  }));
-  return c.json({
-    success: true,
-    data: safeChannels
-  });
-});
-channels.get("/oauth-url", async (c) => {
-  const baseUrl = new URL(c.req.url).origin;
-  const redirectUri = `${baseUrl}/api/channels/oauth/callback`;
-  const params = new URLSearchParams({
-    client_id: c.env.YOUTUBE_CLIENT_ID,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "https://www.googleapis.com/auth/youtube.force-ssl",
-    access_type: "offline",
-    prompt: "consent"
-  });
-  const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-  return c.json({
-    success: true,
-    data: { url: oauthUrl, redirectUri }
-  });
-});
-channels.get("/oauth/callback", async (c) => {
-  const code = c.req.query("code");
-  const error = c.req.query("error");
-  if (error) {
-    return c.redirect(`/dashboard?error=${encodeURIComponent(error)}`);
-  }
-  if (!code) {
-    return c.redirect("/dashboard?error=No authorization code");
-  }
-  try {
-    const user2 = c.get("user");
-    const baseUrl = new URL(c.req.url).origin;
-    const redirectUri = `${baseUrl}/api/channels/oauth/callback`;
-    const channelInfo = await exchangeCodeForChannel(c.env, code, redirectUri);
-    const existingChannel = await getChannelByYouTubeId(c.env.KV, channelInfo.channelId);
-    if (existingChannel) {
-      await updateChannel(c.env.KV, existingChannel.id, {
-        youtube: {
-          ...existingChannel.youtube,
-          accessToken: channelInfo.accessToken,
-          refreshToken: channelInfo.refreshToken,
-          expiresAt: channelInfo.expiresAt
-        }
-      });
-      return c.redirect(`/dashboard?success=Channel reconnected&channelId=${existingChannel.id}`);
-    }
-    const channelId = crypto.randomUUID();
-    const newChannel = {
-      id: channelId,
-      userId: user2.id,
-      youtube: {
-        accessToken: channelInfo.accessToken,
-        refreshToken: channelInfo.refreshToken,
-        expiresAt: channelInfo.expiresAt,
-        channelId: channelInfo.channelId,
-        channelTitle: channelInfo.channelTitle
-      },
-      settings: DEFAULT_SETTINGS,
-      schedule: DEFAULT_SCHEDULE,
-      isActive: true,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    await saveChannel(c.env.KV, newChannel);
-    return c.redirect(`/dashboard?success=Channel registered&channelId=${channelId}`);
-  } catch (err) {
-    console.error("OAuth callback error:", err);
-    return c.redirect(`/dashboard?error=${encodeURIComponent(err instanceof Error ? err.message : "Unknown error")}`);
-  }
-});
-channels.get("/:id", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  const safeChannel = {
-    id: channel.id,
-    youtubeChannelId: channel.youtube.channelId,
-    channelTitle: channel.youtube.channelTitle,
-    settings: channel.settings,
-    schedule: channel.schedule,
-    isActive: channel.isActive,
-    createdAt: channel.createdAt,
-    updatedAt: channel.updatedAt,
-    lastFetchedAt: channel.lastFetchedAt,
-    lastApprovedAt: channel.lastApprovedAt
-  };
-  return c.json({
-    success: true,
-    data: safeChannel
-  });
-});
-channels.get("/:id/stats", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  const stats = await getChannelStats(c.env.KV, channelId);
-  return c.json({
-    success: true,
-    data: {
-      ...stats,
-      lastFetchedAt: channel.lastFetchedAt,
-      lastApprovedAt: channel.lastApprovedAt
-    }
-  });
-});
-channels.get("/:id/comments", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  const page = parseInt(c.req.query("page") || "1");
-  const limit = parseInt(c.req.query("limit") || "20");
-  const status = c.req.query("status") || "all";
-  const result = await getChannelComments(c.env.KV, channelId, { page, limit, status });
-  return c.json({
-    success: true,
-    data: result
-  });
-});
-channels.put("/:id/schedule", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const body = await c.req.json();
-    if (body.approveTimes) {
-      const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-      for (const time2 of body.approveTimes) {
-        if (!timeRegex.test(time2)) {
-          return c.json({
-            success: false,
-            error: `Invalid time format: ${time2}. Use HH:MM format.`
-          }, 400);
-        }
-      }
-    }
-    const updatedSchedule = {
-      ...channel.schedule,
-      ...body
-    };
-    await updateChannel(c.env.KV, channelId, { schedule: updatedSchedule });
-    return c.json({
-      success: true,
-      message: "\uC2A4\uCF00\uC904\uC774 \uC5C5\uB370\uC774\uD2B8\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      data: updatedSchedule
-    });
-  } catch (error) {
-    return c.json({
-      success: false,
-      error: "Failed to update schedule"
-    }, 500);
-  }
-});
-channels.put("/:id/settings", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const body = await c.req.json();
-    const updatedSettings = {
-      ...channel.settings,
-      ...body
-    };
-    await updateChannel(c.env.KV, channelId, { settings: updatedSettings });
-    return c.json({
-      success: true,
-      message: "\uC124\uC815\uC774 \uC5C5\uB370\uC774\uD2B8\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      data: updatedSettings
-    });
-  } catch (error) {
-    return c.json({
-      success: false,
-      error: "Failed to update settings"
-    }, 500);
-  }
-});
-channels.put("/:id/toggle", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  await updateChannel(c.env.KV, channelId, { isActive: !channel.isActive });
-  return c.json({
-    success: true,
-    message: channel.isActive ? "\uCC44\uB110\uC774 \uBE44\uD65C\uC131\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4." : "\uCC44\uB110\uC774 \uD65C\uC131\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-    data: { isActive: !channel.isActive }
-  });
-});
-channels.post("/:id/fetch", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const rawComments = await fetchChannelComments(c.env, channel);
-    let newComments = 0;
-    let existingComments = 0;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    for (const rawComment of rawComments) {
-      const exists = await channelCommentExists(c.env.KV, channelId, rawComment.id);
-      if (!exists) {
-        await saveChannelComment(c.env.KV, channelId, {
-          id: rawComment.id,
-          channelId,
-          videoId: rawComment.videoId,
-          videoTitle: rawComment.videoTitle,
-          authorName: rawComment.authorName,
-          authorChannelId: rawComment.authorChannelId,
-          text: rawComment.text,
-          publishedAt: rawComment.publishedAt,
-          fetchedAt: now,
-          status: rawComment.status,
-          replyText: rawComment.replyText
-        });
-        newComments++;
-      } else {
-        existingComments++;
-      }
-    }
-    await setChannelLastFetchedAt(c.env.KV, channelId, (/* @__PURE__ */ new Date()).toISOString());
-    return c.json({
-      success: true,
-      data: {
-        newComments,
-        existingComments,
-        total: rawComments.length,
-        channelId
-      },
-      message: `${newComments}\uAC1C\uC758 \uC0C8 \uB313\uAE00\uC744 \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.`
-    });
-  } catch (error) {
-    console.error("Fetch error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch comments"
-    }, 500);
-  }
-});
-channels.post("/:id/classify", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const unclassifiedComments = await getChannelCommentsByStatus(c.env.KV, channelId, "unclassified");
-    if (unclassifiedComments.length === 0) {
-      return c.json({
-        success: true,
-        data: { classified: 0, channelId },
-        message: "\uBD84\uB958\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      });
-    }
-    const settings = channel.settings;
-    let classifiedCount = 0;
-    const errors = [];
-    const llmOptions = getLLMOptions2(user2);
-    for (const comment of unclassifiedComments) {
-      try {
-        const classification = await classifyComment(c.env, comment.text, llmOptions);
-        await updateChannelComment(c.env.KV, channelId, comment.id, {
-          type: classification.type,
-          attitude: settings.attitudeMap[classification.type],
-          status: "pending"
-        });
-        classifiedCount++;
-      } catch (error) {
-        console.error(`Classify error for ${comment.id}:`, error);
-        errors.push(`${comment.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
-    }
-    return c.json({
-      success: true,
-      data: {
-        classified: classifiedCount,
-        total: unclassifiedComments.length,
-        errors: errors.length > 0 ? errors : void 0,
-        channelId
-      },
-      message: `${classifiedCount}\uAC1C\uC758 \uB313\uAE00\uC744 \uBD84\uB958\uD588\uC2B5\uB2C8\uB2E4.`
-    });
-  } catch (error) {
-    console.error("Classify error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to classify comments"
-    }, 500);
-  }
-});
-channels.post("/:id/generate", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const pendingComments = await getChannelCommentsByStatus(c.env.KV, channelId, "pending");
-    if (pendingComments.length === 0) {
-      return c.json({
-        success: true,
-        data: { generated: 0, channelId },
-        message: "\uC751\uB2F5\uC744 \uC0DD\uC131\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      });
-    }
-    const settings = channel.settings;
-    const llmOptions = getLLMOptions2(user2);
-    let generatedCount = 0;
-    const errors = [];
-    const repliesMap = await generateRepliesForComments(c.env, pendingComments, settings, llmOptions);
-    for (const comment of pendingComments) {
-      const replyText = repliesMap.get(comment.id);
-      if (replyText) {
-        try {
-          await updateChannelComment(c.env.KV, channelId, comment.id, {
-            status: "generated",
-            replyText,
-            generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          });
-          generatedCount++;
-        } catch (error) {
-          console.error(`Update error for ${comment.id}:`, error);
-          errors.push(`${comment.id}: ${error instanceof Error ? error.message : "Update failed"}`);
-        }
-      } else {
-        errors.push(`${comment.id}: \uC751\uB2F5 \uC0DD\uC131 \uC2E4\uD328`);
-      }
-    }
-    return c.json({
-      success: true,
-      data: {
-        generated: generatedCount,
-        total: pendingComments.length,
-        errors: errors.length > 0 ? errors : void 0,
-        channelId
-      },
-      message: `${generatedCount}\uAC1C\uC758 \uC751\uB2F5\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4. \uD655\uC778 \uD6C4 \uC2B9\uC778\uD574\uC8FC\uC138\uC694.`
-    });
-  } catch (error) {
-    console.error("Generate error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to generate replies"
-    }, 500);
-  }
-});
-channels.put("/:id/comments/:commentId/reply", async (c) => {
-  const channelId = c.req.param("id");
-  const commentId = c.req.param("commentId");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const body = await c.req.json();
-    if (!body.replyText || body.replyText.trim() === "") {
-      return c.json({
-        success: false,
-        error: "\uC751\uB2F5 \uB0B4\uC6A9\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694."
-      }, 400);
-    }
-    const comment = await getChannelComment(c.env.KV, channelId, commentId);
-    if (!comment) {
-      return c.json({
-        success: false,
-        error: "\uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 404);
-    }
-    await updateChannelComment(c.env.KV, channelId, commentId, {
-      replyText: body.replyText.trim(),
-      generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "\uC751\uB2F5\uC774 \uC218\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error(`Edit reply error for ${commentId}:`, error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to edit reply"
-    }, 500);
-  }
-});
-channels.delete("/:id/comments/:commentId/reply", async (c) => {
-  const channelId = c.req.param("id");
-  const commentId = c.req.param("commentId");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const comment = await getChannelComment(c.env.KV, channelId, commentId);
-    if (!comment) {
-      return c.json({
-        success: false,
-        error: "\uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 404);
-    }
-    await updateChannelComment(c.env.KV, channelId, commentId, {
-      status: "pending",
-      replyText: void 0,
-      generatedAt: void 0
-    });
-    return c.json({
-      success: true,
-      message: '\uC751\uB2F5\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uB313\uAE00\uC774 "\uBBF8\uC751\uB2F5" \uC0C1\uD0DC\uB85C \uB3CC\uC544\uAC14\uC2B5\uB2C8\uB2E4.'
-    });
-  } catch (error) {
-    console.error(`Delete reply error for ${commentId}:`, error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to delete reply"
-    }, 500);
-  }
-});
-channels.post("/:id/comments/:commentId/approve", async (c) => {
-  const channelId = c.req.param("id");
-  const commentId = c.req.param("commentId");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const comment = await getChannelComment(c.env.KV, channelId, commentId);
-    if (!comment) {
-      return c.json({
-        success: false,
-        error: "\uC2B9\uC778\uD560 \uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 404);
-    }
-    if (comment.status !== "generated") {
-      return c.json({
-        success: false,
-        error: "\uC0DD\uC131\uB41C \uC751\uB2F5\uC774 \uC788\uB294 \uB313\uAE00\uB9CC \uC2B9\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
-      }, 400);
-    }
-    if (!comment.replyText) {
-      return c.json({
-        success: false,
-        error: "\uC0DD\uC131\uB41C \uC751\uB2F5\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      }, 400);
-    }
-    await replyToComment(c.env, comment.id, comment.replyText, channel);
-    await updateChannelComment(c.env.KV, channelId, commentId, {
-      status: "replied",
-      repliedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return c.json({
-      success: true,
-      message: "\uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."
-    });
-  } catch (error) {
-    console.error(`Approve error for ${commentId}:`, error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to approve comment"
-    }, 500);
-  }
-});
-channels.post("/:id/approve-all", async (c) => {
-  const channelId = c.req.param("id");
-  const user2 = c.get("user");
-  const channel = await getChannelById(c.env.KV, channelId);
-  if (!channel) {
-    return c.json({ success: false, error: "Channel not found" }, 404);
-  }
-  if (channel.userId !== user2.id) {
-    return c.json({ success: false, error: "Access denied" }, 403);
-  }
-  try {
-    const generatedComments = await getChannelCommentsByStatus(c.env.KV, channelId, "generated");
-    if (generatedComments.length === 0) {
-      return c.json({
-        success: true,
-        data: { approved: 0, channelId },
-        message: "\uC2B9\uC778\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-      });
-    }
-    let approvedCount = 0;
-    const errors = [];
-    for (const comment of generatedComments) {
-      try {
-        if (!comment.replyText)
-          continue;
-        await replyToComment(c.env, comment.id, comment.replyText, channel);
-        await updateChannelComment(c.env.KV, channelId, comment.id, {
-          status: "replied",
-          repliedAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        approvedCount++;
-      } catch (error) {
-        console.error(`Approve error for ${comment.id}:`, error);
-        errors.push(`${comment.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
-    }
-    await updateChannel(c.env.KV, channelId, { lastApprovedAt: (/* @__PURE__ */ new Date()).toISOString() });
-    return c.json({
-      success: true,
-      data: {
-        approved: approvedCount,
-        total: generatedComments.length,
-        errors: errors.length > 0 ? errors : void 0,
-        channelId
-      },
-      message: `${approvedCount}\uAC1C\uC758 \uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`
-    });
-  } catch (error) {
-    console.error("Approve-all error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to approve comments"
-    }, 500);
-  }
-});
-var channels_default = channels;
-
-// src/services/scheduler.ts
-init_youtube_channel();
-function isPauseTime(pauseStart, pauseEnd, timezone = "Asia/Seoul") {
-  if (!pauseStart || !pauseEnd)
-    return false;
-  const now = /* @__PURE__ */ new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
-  const currentTime = formatter.format(now);
-  const parts = currentTime.split(":");
-  const currentMinutes = parseInt(parts[0] || "0", 10) * 60 + parseInt(parts[1] || "0", 10);
-  const startParts = pauseStart.split(":");
-  const startMinutes = parseInt(startParts[0] || "0", 10) * 60 + parseInt(startParts[1] || "0", 10);
-  const endParts = pauseEnd.split(":");
-  const endMinutes = parseInt(endParts[0] || "0", 10) * 60 + parseInt(endParts[1] || "0", 10);
-  if (startMinutes > endMinutes) {
-    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
-  }
-  return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-}
-function isApproveTime(approveTimes, timezone) {
-  const now = /* @__PURE__ */ new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
-  const currentTime = formatter.format(now);
-  const parts = currentTime.split(":");
-  const currentHour = parseInt(parts[0] || "0", 10);
-  const currentMinute = parseInt(parts[1] || "0", 10);
-  const currentTotalMinutes = currentHour * 60 + currentMinute;
-  for (const time2 of approveTimes) {
-    const timeParts = time2.split(":");
-    const hour = parseInt(timeParts[0] || "0", 10);
-    const minute = parseInt(timeParts[1] || "0", 10);
-    const targetTotalMinutes = hour * 60 + minute;
-    const diff = Math.abs(currentTotalMinutes - targetTotalMinutes);
-    if (diff <= 15 || diff >= 24 * 60 - 15) {
-      return true;
-    }
-  }
-  return false;
-}
-async function ensureValidToken(env, channel) {
-  if (channel.needsReauth) {
-    console.log(`[${channel.youtube.channelTitle}] Needs re-auth, skipping`);
-    return null;
-  }
-  const expiresAt = new Date(channel.youtube.expiresAt);
-  const now = /* @__PURE__ */ new Date();
-  if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1e3) {
-    console.log(`[${channel.youtube.channelTitle}] Refreshing token...`);
-    try {
-      const newTokens = await refreshChannelToken(env, channel.youtube.refreshToken);
-      const updatedChannel = {
-        ...channel,
-        youtube: {
-          ...channel.youtube,
-          accessToken: newTokens.accessToken,
-          expiresAt: newTokens.expiresAt
-        },
-        needsReauth: false,
-        lastError: void 0
-      };
-      await updateChannel(env.KV, channel.id, {
-        youtube: updatedChannel.youtube,
-        needsReauth: false,
-        lastError: void 0
-      });
-      return updatedChannel;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      console.error(`[${channel.youtube.channelTitle}] Token refresh failed: ${errorMessage}`);
-      await updateChannel(env.KV, channel.id, {
-        needsReauth: true,
-        lastError: `\uD1A0\uD070 \uAC31\uC2E0 \uC2E4\uD328: ${errorMessage}`,
-        isActive: false
-        // 자동으로 비활성화
-      });
-      return null;
-    }
-  }
-  return channel;
-}
-async function processChannelFetch(env, channel) {
-  const result = { fetched: 0, classified: 0, generated: 0 };
-  try {
-    if (isPauseTime(channel.schedule.pauseStart, channel.schedule.pauseEnd, channel.schedule.timezone)) {
-      console.log(`[${channel.youtube.channelTitle}] In pause time, skipping fetch`);
-      result.skipped = "pause_time";
-      return result;
-    }
-    const refreshedChannel = await ensureValidToken(env, channel);
-    if (!refreshedChannel) {
-      result.skipped = "needs_reauth";
-      return result;
-    }
-    channel = refreshedChannel;
-    console.log(`[${channel.youtube.channelTitle}] Fetching comments...`);
-    const comments = await fetchChannelComments(env, channel);
-    for (const comment of comments) {
-      if (await channelCommentExists(env.KV, channel.id, comment.id)) {
-        continue;
-      }
-      const storedComment = {
-        ...comment,
-        channelId: channel.id,
-        status: "unclassified",
-        fetchedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      await saveChannelComment(env.KV, channel.id, storedComment);
-      result.fetched++;
-    }
-    console.log(`[${channel.youtube.channelTitle}] Fetched ${result.fetched} new comments`);
-    const unclassified = await getChannelCommentsByStatus(env.KV, channel.id, "unclassified");
-    for (const comment of unclassified) {
-      try {
-        const classification = await classifyComment(env, comment.text);
-        await updateChannelComment(env.KV, channel.id, comment.id, {
-          type: classification.type,
-          attitude: channel.settings.attitudeMap[classification.type],
-          status: "pending"
-        });
-        result.classified++;
-      } catch (error) {
-        console.error(`[${channel.youtube.channelTitle}] Failed to classify ${comment.id}:`, error);
-      }
-    }
-    console.log(`[${channel.youtube.channelTitle}] Classified ${result.classified} comments`);
-    const pending = await getChannelCommentsByStatus(env.KV, channel.id, "pending");
-    const enabledPending = pending.filter((c) => {
-      const type = c.type || "other";
-      const typeInstruction = channel.settings.typeInstructions?.[type];
-      return !typeInstruction || typeInstruction.enabled !== false;
-    });
-    if (enabledPending.length > 0) {
-      const replies = await generateRepliesForComments(env, enabledPending, channel.settings);
-      for (const [commentId, replyText] of replies) {
-        await updateChannelComment(env.KV, channel.id, commentId, {
-          status: "generated",
-          replyText,
-          generatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        result.generated++;
-      }
-    }
-    console.log(`[${channel.youtube.channelTitle}] Generated ${result.generated} replies`);
-    await updateChannel(env.KV, channel.id, {
-      lastFetchedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } catch (error) {
-    console.error(`[${channel.youtube.channelTitle}] Process failed:`, error);
-  }
-  return result;
-}
-async function processChannelApprove(env, channel) {
-  let approvedCount = 0;
-  try {
-    if (isPauseTime(channel.schedule.pauseStart, channel.schedule.pauseEnd, channel.schedule.timezone)) {
-      console.log(`[${channel.youtube.channelTitle}] In pause time, skipping approve`);
-      return 0;
-    }
-    const refreshedChannel = await ensureValidToken(env, channel);
-    if (!refreshedChannel) {
-      return 0;
-    }
-    channel = refreshedChannel;
-    const generated = await getChannelCommentsByStatus(env.KV, channel.id, "generated");
-    if (generated.length === 0) {
-      return 0;
-    }
-    const now = /* @__PURE__ */ new Date();
-    const approveAfterHours = channel.schedule.approveAfterHours;
-    const eligibleComments = generated.filter((comment) => {
-      if (!approveAfterHours || !comment.generatedAt) {
-        return true;
-      }
-      const generatedAt = new Date(comment.generatedAt);
-      const elapsedHours = (now.getTime() - generatedAt.getTime()) / (1e3 * 60 * 60);
-      return elapsedHours >= approveAfterHours;
-    });
-    if (eligibleComments.length === 0) {
-      console.log(`[${channel.youtube.channelTitle}] No comments ready for approval (${generated.length} waiting for ${approveAfterHours}h)`);
-      return 0;
-    }
-    console.log(`[${channel.youtube.channelTitle}] Approving ${eligibleComments.length}/${generated.length} replies...`);
-    for (const comment of eligibleComments) {
-      if (!comment.replyText)
-        continue;
-      try {
-        await postReplyWithChannel(env, channel, comment.id, comment.replyText);
-        await updateChannelComment(env.KV, channel.id, comment.id, {
-          status: "replied",
-          repliedAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        approvedCount++;
-        await new Promise((resolve) => setTimeout(resolve, 1e3));
-      } catch (error) {
-        console.error(`[${channel.youtube.channelTitle}] Failed to post reply for ${comment.id}:`, error);
-      }
-    }
-    await updateChannel(env.KV, channel.id, {
-      lastApprovedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    console.log(`[${channel.youtube.channelTitle}] Approved ${approvedCount} replies`);
-  } catch (error) {
-    console.error(`[${channel.youtube.channelTitle}] Approve failed:`, error);
-  }
-  return approvedCount;
-}
-async function handleFetchSchedule(env) {
-  console.log("=== Fetch Schedule Started ===");
-  const channels2 = await getActiveChannels(env.KV);
-  console.log(`Found ${channels2.length} active channels`);
-  for (const channel of channels2) {
-    const now = /* @__PURE__ */ new Date();
-    const lastFetched = channel.lastFetchedAt ? new Date(channel.lastFetchedAt) : null;
-    let shouldFetch = true;
-    if (lastFetched) {
-      const diffMinutes = (now.getTime() - lastFetched.getTime()) / (1e3 * 60);
-      switch (channel.schedule.fetchInterval) {
-        case "every15min":
-          shouldFetch = diffMinutes >= 14;
-          break;
-        case "every30min":
-          shouldFetch = diffMinutes >= 29;
-          break;
-        case "hourly":
-        default:
-          shouldFetch = diffMinutes >= 59;
-          break;
-      }
-    }
-    if (shouldFetch) {
-      await processChannelFetch(env, channel);
-    } else {
-      console.log(`[${channel.youtube.channelTitle}] Skipping (not due yet)`);
-    }
-  }
-  console.log("=== Fetch Schedule Completed ===");
-}
-async function handleApproveSchedule(env) {
-  console.log("=== Approve Schedule Started ===");
-  const channels2 = await getActiveChannels(env.KV);
-  console.log(`Found ${channels2.length} active channels`);
-  for (const channel of channels2) {
-    if (!channel.schedule.autoApprove) {
-      console.log(`[${channel.youtube.channelTitle}] Auto-approve disabled, skipping`);
-      continue;
-    }
-    if (!isApproveTime(channel.schedule.approveTimes, channel.schedule.timezone)) {
-      console.log(`[${channel.youtube.channelTitle}] Not approve time, skipping`);
-      continue;
-    }
-    if (channel.lastApprovedAt) {
-      const lastApproved = new Date(channel.lastApprovedAt);
-      const now = /* @__PURE__ */ new Date();
-      const diffMinutes = (now.getTime() - lastApproved.getTime()) / (1e3 * 60);
-      if (diffMinutes < 30) {
-        console.log(`[${channel.youtube.channelTitle}] Already approved recently, skipping`);
-        continue;
-      }
-    }
-    await processChannelApprove(env, channel);
-  }
-  console.log("=== Approve Schedule Completed ===");
-}
-
-// src/routes/schedule.ts
-var app = new Hono2();
-app.use("*", async (c, next) => {
-  const authHeader = c.req.header("X-Cron-Secret");
-  const cronSecret = c.env.JWT_SECRET;
-  if (!authHeader || authHeader !== cronSecret) {
-    return c.json({ success: false, error: "Unauthorized" }, 401);
-  }
-  return next();
-});
-app.post("/fetch", async (c) => {
-  console.log("Schedule API: fetch called");
-  try {
-    await handleFetchSchedule(c.env);
-    return c.json({ success: true, message: "Fetch schedule completed" });
-  } catch (error) {
-    console.error("Fetch schedule error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error"
-    }, 500);
-  }
-});
-app.post("/approve", async (c) => {
-  console.log("Schedule API: approve called");
-  try {
-    await handleApproveSchedule(c.env);
-    return c.json({ success: true, message: "Approve schedule completed" });
-  } catch (error) {
-    console.error("Approve schedule error:", error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error"
-    }, 500);
-  }
-});
-var schedule_default = app;
-
-// src/views/dashboard.ts
-async function renderDashboard(env, props) {
-  const { currentChannel, userChannels = [], user: user2 } = props || {};
-  const stats = currentChannel ? await getChannelStats(env.KV, currentChannel.id) : await getStats(env.KV);
-  const lastFetchedAt = currentChannel ? await getChannelLastFetchedAt(env.KV, currentChannel.id) : await getLastFetchedAt(env.KV);
-  const hasApiKey = !!user2?.openrouterApiKey;
-  return `<!DOCTYPE html>
+${JSON.stringify(i,null,2)}`,g=await et(e,sn,p,m,o);try{let u=g.match(/\[[\s\S]*\]/);if(u){let y=JSON.parse(u[0]);for(let x of y)x.id&&x.reply&&s.set(x.id,x.reply)}}catch(u){console.error("Failed to parse batch replies:",u,g)}return s}async function L(e,t,n,o){if(o){let{postReplyWithChannel:s}=await Promise.resolve().then(()=>(we(),tn));await s(e,o,t,n)}else await en(e,t,n)}var I=new k;function nt(e){return{apiKey:e.get("user")?.openrouterApiKey}}I.get("/comments",async e=>{let t=parseInt(e.req.query("page")||"1"),n=parseInt(e.req.query("limit")||"20"),o=e.req.query("status")||"all",s=await K(e.env.KV,{page:t,limit:n,status:o}),r=await ee(e.env.KV);return e.json({success:!0,data:{...s,lastFetchedAt:r}})});I.get("/stats",async e=>{let t=await fe(e.env.KV),n=await ee(e.env.KV);return e.json({success:!0,data:{...t,lastFetchedAt:n}})});I.post("/fetch",async e=>{try{let t=await Zt(e.env);return e.json({success:!0,data:t,message:`${t.newComments}\uAC1C\uC758 \uC0C8 \uB313\uAE00\uC744 \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.`})}catch(t){return console.error("Fetch error:",t),e.json({success:!1,error:t instanceof Error?t.message:"Failed to fetch comments"},500)}});I.post("/classify",async e=>{try{let t=await Lt(e.env.KV);if(t.length===0)return e.json({success:!0,data:{classified:0},message:"\uBD84\uB958\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."});let n=await Z(e.env.KV),o=0,s=[],r=nt(e);for(let a of t)try{let c=await M(e.env,a.text,r);await _(e.env.KV,a.id,{type:c.type,attitude:n.attitudeMap[c.type],status:"pending"}),o++}catch(c){console.error(`Classify error for ${a.id}:`,c),s.push(`${a.id}: ${c instanceof Error?c.message:"Unknown error"}`)}return e.json({success:!0,data:{classified:o,total:t.length,errors:s.length>0?s:void 0},message:`${o}\uAC1C\uC758 \uB313\uAE00\uC744 \uBD84\uB958\uD588\uC2B5\uB2C8\uB2E4.`})}catch(t){return console.error("Classify error:",t),e.json({success:!1,error:t instanceof Error?t.message:"Failed to classify comments"},500)}});I.post("/generate",async e=>{try{let t=await Dt(e.env.KV);if(t.length===0)return e.json({success:!0,data:{generated:0},message:"\uC751\uB2F5\uC744 \uC0DD\uC131\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."});let n=await Z(e.env.KV),o=nt(e),s=0,r=[],a=await q(e.env,t,n,o);for(let c of t){let i=a.get(c.id);if(i)try{await _(e.env.KV,c.id,{status:"generated",replyText:i,generatedAt:new Date().toISOString()}),s++}catch(l){console.error(`Update error for ${c.id}:`,l),r.push(`${c.id}: ${l instanceof Error?l.message:"Update failed"}`)}else r.push(`${c.id}: \uC751\uB2F5 \uC0DD\uC131 \uC2E4\uD328`)}return e.json({success:!0,data:{generated:s,total:t.length,errors:r.length>0?r:void 0},message:`${s}\uAC1C\uC758 \uC751\uB2F5\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4. \uD655\uC778 \uD6C4 \uC2B9\uC778\uD574\uC8FC\uC138\uC694.`})}catch(t){return console.error("Generate error:",t),e.json({success:!1,error:t instanceof Error?t.message:"Failed to generate replies"},500)}});I.put("/comments/:id/reply",async e=>{let t=e.req.param("id");try{let n=await e.req.json();return!n.replyText||n.replyText.trim()===""?e.json({success:!1,error:"\uC751\uB2F5 \uB0B4\uC6A9\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694."},400):(await _(e.env.KV,t,{replyText:n.replyText.trim(),generatedAt:new Date().toISOString()}),e.json({success:!0,message:"\uC751\uB2F5\uC774 \uC218\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4."}))}catch(n){return console.error(`Edit reply error for ${t}:`,n),e.json({success:!1,error:n instanceof Error?n.message:"Failed to edit reply"},500)}});I.post("/comments/:id/approve",async e=>{let t=e.req.param("id");try{let o=(await K(e.env.KV,{status:"generated",limit:1e3})).comments.find(s=>s.id===t);return o?o.replyText?(await L(e.env,o.id,o.replyText),await _(e.env.KV,t,{status:"replied",repliedAt:new Date().toISOString()}),e.json({success:!0,message:"\uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})):e.json({success:!1,error:"\uC0DD\uC131\uB41C \uC751\uB2F5\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."},400):e.json({success:!1,error:"\uC2B9\uC778\uD560 \uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404)}catch(n){return console.error(`Approve error for ${t}:`,n),e.json({success:!1,error:n instanceof Error?n.message:"Failed to approve comment"},500)}});I.post("/approve-all",async e=>{try{let t=await Ut(e.env.KV);if(t.length===0)return e.json({success:!0,data:{approved:0},message:"\uC2B9\uC778\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."});let n=0,o=[];for(let s of t)try{if(!s.replyText)continue;await L(e.env,s.id,s.replyText),await _(e.env.KV,s.id,{status:"replied",repliedAt:new Date().toISOString()}),n++}catch(r){console.error(`Approve error for ${s.id}:`,r),o.push(`${s.id}: ${r instanceof Error?r.message:"Unknown error"}`)}return e.json({success:!0,data:{approved:n,total:t.length,errors:o.length>0?o:void 0},message:`${n}\uAC1C\uC758 \uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`})}catch(t){return console.error("Approve-all error:",t),e.json({success:!1,error:t instanceof Error?t.message:"Failed to approve comments"},500)}});I.post("/comments/:id/reply",async e=>{let t=e.req.param("id");try{let n=await e.req.json(),s=(await K(e.env.KV,{status:"all",limit:1e3})).comments.find(i=>i.id===t);if(!s)return e.json({success:!1,error:"Comment not found"},404);let r=await Z(e.env.KV),a=nt(e),c=n.customReply||await rn(e.env,s,r,a);return await L(e.env,s.id,c),await _(e.env.KV,t,{status:"replied",replyText:c,repliedAt:new Date().toISOString()}),e.json({success:!0,data:{replyText:c},message:"\uB313\uAE00\uC5D0 \uC751\uB2F5\uD588\uC2B5\uB2C8\uB2E4."})}catch(n){return console.error(`Reply error for ${t}:`,n),e.json({success:!1,error:n instanceof Error?n.message:"Failed to reply"},500)}});I.get("/settings",async e=>{let t=await Z(e.env.KV);return e.json({success:!0,data:t})});I.put("/settings",async e=>{try{let t=await e.req.json();return await zt(e.env.KV,t),e.json({success:!0,message:"\uC124\uC815\uC774 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})}catch{return e.json({success:!1,error:"Failed to save settings"},500)}});var an=I;async function Ae(e){let t=new TextEncoder,n=crypto.getRandomValues(new Uint8Array(16)),o=await crypto.subtle.importKey("raw",t.encode(e),"PBKDF2",!1,["deriveBits"]),s=await crypto.subtle.deriveBits({name:"PBKDF2",salt:n,iterations:1e5,hash:"SHA-256"},o,256),r=new Uint8Array(s),a=new Uint8Array(n.length+r.length);return a.set(n),a.set(r,n.length),btoa(String.fromCharCode(...a))}async function ke(e,t){let n=new TextEncoder,o=Uint8Array.from(atob(t),d=>d.charCodeAt(0)),s=o.slice(0,16),r=o.slice(16),a=await crypto.subtle.importKey("raw",n.encode(e),"PBKDF2",!1,["deriveBits"]),c=await crypto.subtle.deriveBits({name:"PBKDF2",salt:s,iterations:1e5,hash:"SHA-256"},a,256),i=new Uint8Array(c);if(i.length!==r.length)return!1;let l=0;for(let d=0;d<i.length;d++){let p=i[d],m=r[d];p!==void 0&&m!==void 0&&(l|=p^m)}return l===0}function ot(e){let t=typeof e=="string"?e:String.fromCharCode(...e);return btoa(t).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}function wo(e){let t=e.replace(/-/g,"+").replace(/_/g,"/"),n=(4-t.length%4)%4,o=t+"=".repeat(n);return atob(o)}async function cn(e,t){let n=new TextEncoder,o=await crypto.subtle.importKey("raw",n.encode(t),{name:"HMAC",hash:"SHA-256"},!1,["sign"]),s=await crypto.subtle.sign("HMAC",o,n.encode(e));return ot(new Uint8Array(s))}async function Ao(e,t,n){let o=await cn(e,n);return t===o}async function Te(e,t,n=7*24*60*60){let o={alg:"HS256",typ:"JWT"},s=Math.floor(Date.now()/1e3),r={...e,iat:s,exp:s+n},a=ot(JSON.stringify(o)),c=ot(JSON.stringify(r)),i=`${a}.${c}`,l=await cn(i,t);return`${i}.${l}`}async function T(e,t){try{let n=e.split(".");if(n.length!==3)return null;let o=n[0],s=n[1],r=n[2];if(!o||!s||!r)return null;let a=`${o}.${s}`;if(!await Ao(a,r,t))return null;let i=JSON.parse(wo(s)),l=Math.floor(Date.now()/1e3);return i.exp<l?null:i}catch{return null}}function ln(){return crypto.randomUUID()}var ne=new k;ne.post("/signup",async e=>{try{let t=await e.req.json();if(!t.email||!t.password||!t.name)return e.json({success:!1,error:"\uC774\uBA54\uC77C, \uBE44\uBC00\uBC88\uD638, \uC774\uB984\uC744 \uBAA8\uB450 \uC785\uB825\uD574\uC8FC\uC138\uC694."},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.email))return e.json({success:!1,error:"\uC720\uD6A8\uD55C \uC774\uBA54\uC77C \uC8FC\uC18C\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."},400);if(t.password.length<6)return e.json({success:!1,error:"\uBE44\uBC00\uBC88\uD638\uB294 6\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4."},400);if(await Mt(e.env.KV,t.email))return e.json({success:!1,error:"\uC774\uBBF8 \uC0AC\uC6A9 \uC911\uC778 \uC774\uBA54\uC77C\uC785\uB2C8\uB2E4."},409);let o=await Ae(t.password),s=new Date().toISOString(),r={id:ln(),email:t.email.toLowerCase(),passwordHash:o,name:t.name,role:"user",createdAt:s,updatedAt:s};await Ft(e.env.KV,r);let a=await Te({userId:r.id,email:r.email,role:r.role},e.env.JWT_SECRET),c=7*24*60*60;return e.header("Set-Cookie",`token=${a}; Path=/; Max-Age=${c}; HttpOnly; Secure; SameSite=Lax`),e.json({success:!0,token:a,user:{id:r.id,email:r.email,name:r.name,role:r.role}},201)}catch(t){return console.error("Signup error:",t),e.json({success:!1,error:"\uD68C\uC6D0\uAC00\uC785 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});ne.post("/login",async e=>{try{let t=await e.req.json();if(!t.email||!t.password)return e.json({success:!1,error:"\uC774\uBA54\uC77C\uACFC \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."},400);let n=await Vt(e.env.KV,t.email);if(!n)return e.json({success:!1,error:"\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."},401);if(!await ke(t.password,n.passwordHash))return e.json({success:!1,error:"\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."},401);await B(e.env.KV,n.id,{lastLoginAt:new Date().toISOString()});let s=await Te({userId:n.id,email:n.email,role:n.role},e.env.JWT_SECRET),r=7*24*60*60;return e.header("Set-Cookie",`token=${s}; Path=/; Max-Age=${r}; HttpOnly; Secure; SameSite=Lax`),e.json({success:!0,token:s,user:{id:n.id,email:n.email,name:n.name,role:n.role}})}catch(t){return console.error("Login error:",t),e.json({success:!1,error:"\uB85C\uADF8\uC778 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});ne.get("/me",async e=>{try{let t=e.req.header("Authorization");if(!t||!t.startsWith("Bearer "))return e.json({success:!1,error:"\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."},401);let n=t.substring(7),o=await T(n,e.env.JWT_SECRET);if(!o)return e.json({success:!1,error:"\uC720\uD6A8\uD558\uC9C0 \uC54A\uAC70\uB098 \uB9CC\uB8CC\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4."},401);let s=await w(e.env.KV,o.userId);return s?e.json({success:!0,user:{id:s.id,email:s.email,name:s.name,role:s.role}}):e.json({success:!1,error:"\uC0AC\uC6A9\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404)}catch(t){return console.error("Get me error:",t),e.json({success:!1,error:"\uC0AC\uC6A9\uC790 \uC815\uBCF4 \uC870\uD68C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});ne.post("/refresh",async e=>{try{let t=e.req.header("Authorization");if(!t||!t.startsWith("Bearer "))return e.json({success:!1,error:"\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."},401);let n=t.substring(7),o=await T(n,e.env.JWT_SECRET);if(!o)return e.json({success:!1,error:"\uC720\uD6A8\uD558\uC9C0 \uC54A\uAC70\uB098 \uB9CC\uB8CC\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4."},401);let s=await w(e.env.KV,o.userId);if(!s)return e.json({success:!1,error:"\uC0AC\uC6A9\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404);let r=await Te({userId:s.id,email:s.email,role:s.role},e.env.JWT_SECRET);return e.json({success:!0,token:r,user:{id:s.id,email:s.email,name:s.name,role:s.role}})}catch(t){return console.error("Refresh token error:",t),e.json({success:!1,error:"\uD1A0\uD070 \uAC31\uC2E0 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});var dn=ne;var H=new k;H.use("*",async(e,t)=>{let n=e.req.header("Authorization");if(!n||!n.startsWith("Bearer "))return e.json({success:!1,error:"\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."},401);let o=n.substring(7),s=await T(o,e.env.JWT_SECRET);if(!s)return e.json({success:!1,error:"\uC720\uD6A8\uD558\uC9C0 \uC54A\uAC70\uB098 \uB9CC\uB8CC\uB41C \uD1A0\uD070\uC785\uB2C8\uB2E4."},401);let r=await w(e.env.KV,s.userId);if(!r)return e.json({success:!1,error:"\uC0AC\uC6A9\uC790\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404);e.set("user",r),e.set("payload",s),await t()});H.put("/apikey",async e=>{try{let t=e.get("user"),n=await e.req.json();return n.apiKey?n.apiKey.startsWith("sk-or-")?(await B(e.env.KV,t.id,{openrouterApiKey:n.apiKey,updatedAt:new Date().toISOString()}),e.json({success:!0,message:"API Key\uAC00 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})):e.json({success:!1,error:"\uC62C\uBC14\uB978 OpenRouter API Key \uD615\uC2DD\uC774 \uC544\uB2D9\uB2C8\uB2E4."},400):e.json({success:!1,error:"API Key\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."},400)}catch(t){return console.error("Save API Key error:",t),e.json({success:!1,error:"API Key \uC800\uC7A5 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});H.delete("/apikey",async e=>{try{let t=e.get("user");return await B(e.env.KV,t.id,{openrouterApiKey:void 0,updatedAt:new Date().toISOString()}),e.json({success:!0,message:"API Key\uAC00 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})}catch(t){return console.error("Delete API Key error:",t),e.json({success:!1,error:"API Key \uC0AD\uC81C \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});H.put("/password",async e=>{try{let t=e.get("user"),n=await e.req.json();if(!n.currentPassword||!n.newPassword)return e.json({success:!1,error:"\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uC640 \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694."},400);if(n.newPassword.length<6)return e.json({success:!1,error:"\uC0C8 \uBE44\uBC00\uBC88\uD638\uB294 6\uC790 \uC774\uC0C1\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4."},400);if(!await ke(n.currentPassword,t.passwordHash))return e.json({success:!1,error:"\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."},401);let s=await Ae(n.newPassword);return await B(e.env.KV,t.id,{passwordHash:s,updatedAt:new Date().toISOString()}),e.json({success:!0,message:"\uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})}catch(t){return console.error("Change password error:",t),e.json({success:!1,error:"\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."},500)}});H.get("/me",async e=>{let t=e.get("user");return e.json({success:!0,data:{id:t.id,email:t.email,name:t.name,role:t.role,hasApiKey:!!t.openrouterApiKey,createdAt:t.createdAt}})});var pn=H;we();function un(e){return{apiKey:e?.openrouterApiKey}}var v=new k;v.get("/",async e=>{let t=e.get("user"),o=(await F(e.env.KV,t.id)).map(s=>({id:s.id,youtubeChannelId:s.youtube.channelId,channelTitle:s.youtube.channelTitle,isActive:s.isActive,schedule:s.schedule,createdAt:s.createdAt,lastFetchedAt:s.lastFetchedAt,lastApprovedAt:s.lastApprovedAt}));return e.json({success:!0,data:o})});v.get("/oauth-url",async e=>{let n=`${new URL(e.req.url).origin}/api/channels/oauth/callback`,s=`https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({client_id:e.env.YOUTUBE_CLIENT_ID,redirect_uri:n,response_type:"code",scope:"https://www.googleapis.com/auth/youtube.force-ssl",access_type:"offline",prompt:"consent"})}`;return e.json({success:!0,data:{url:s,redirectUri:n}})});v.get("/oauth/callback",async e=>{let t=e.req.query("code"),n=e.req.query("error");if(n)return e.redirect(`/dashboard?error=${encodeURIComponent(n)}`);if(!t)return e.redirect("/dashboard?error=No authorization code");try{let o=e.get("user"),r=`${new URL(e.req.url).origin}/api/channels/oauth/callback`,a=await Qe(e.env,t,r),c=await be(e.env.KV,a.channelId);if(c)return await A(e.env.KV,c.id,{youtube:{...c.youtube,accessToken:a.accessToken,refreshToken:a.refreshToken,expiresAt:a.expiresAt}}),e.redirect(`/dashboard?success=Channel reconnected&channelId=${c.id}`);let i=crypto.randomUUID(),l={id:i,userId:o.id,youtube:{accessToken:a.accessToken,refreshToken:a.refreshToken,expiresAt:a.expiresAt,channelId:a.channelId,channelTitle:a.channelTitle},settings:z,schedule:me,isActive:!0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};return await he(e.env.KV,l),e.redirect(`/dashboard?success=Channel registered&channelId=${i}`)}catch(o){return console.error("OAuth callback error:",o),e.redirect(`/dashboard?error=${encodeURIComponent(o instanceof Error?o.message:"Unknown error")}`)}});v.get("/:id",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);let s={id:o.id,youtubeChannelId:o.youtube.channelId,channelTitle:o.youtube.channelTitle,settings:o.settings,schedule:o.schedule,isActive:o.isActive,createdAt:o.createdAt,updatedAt:o.updatedAt,lastFetchedAt:o.lastFetchedAt,lastApprovedAt:o.lastApprovedAt};return e.json({success:!0,data:s})});v.get("/:id/stats",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);let s=await ve(e.env.KV,t);return e.json({success:!0,data:{...s,lastFetchedAt:o.lastFetchedAt,lastApprovedAt:o.lastApprovedAt}})});v.get("/:id/comments",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);let s=parseInt(e.req.query("page")||"1"),r=parseInt(e.req.query("limit")||"20"),a=e.req.query("status")||"all",c=await We(e.env.KV,t,{page:s,limit:r,status:a});return e.json({success:!0,data:c})});v.put("/:id/schedule",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);try{let s=await e.req.json();if(s.approveTimes){let a=/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;for(let c of s.approveTimes)if(!a.test(c))return e.json({success:!1,error:`Invalid time format: ${c}. Use HH:MM format.`},400)}let r={...o.schedule,...s};return await A(e.env.KV,t,{schedule:r}),e.json({success:!0,message:"\uC2A4\uCF00\uC904\uC774 \uC5C5\uB370\uC774\uD2B8\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",data:r})}catch{return e.json({success:!1,error:"Failed to update schedule"},500)}});v.put("/:id/settings",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);try{let s=await e.req.json(),r={...o.settings,...s};return await A(e.env.KV,t,{settings:r}),e.json({success:!0,message:"\uC124\uC815\uC774 \uC5C5\uB370\uC774\uD2B8\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",data:r})}catch{return e.json({success:!1,error:"Failed to update settings"},500)}});v.put("/:id/toggle",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);return o?o.userId!==n.id?e.json({success:!1,error:"Access denied"},403):(await A(e.env.KV,t,{isActive:!o.isActive}),e.json({success:!0,message:o.isActive?"\uCC44\uB110\uC774 \uBE44\uD65C\uC131\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4.":"\uCC44\uB110\uC774 \uD65C\uC131\uD654\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",data:{isActive:!o.isActive}})):e.json({success:!1,error:"Channel not found"},404)});v.post("/:id/fetch",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);try{let s=await te(e.env,o),r=0,a=0,c=new Date().toISOString();for(let i of s)await xe(e.env.KV,t,i.id)?a++:(await ye(e.env.KV,t,{id:i.id,channelId:t,videoId:i.videoId,videoTitle:i.videoTitle,authorName:i.authorName,authorChannelId:i.authorChannelId,text:i.text,publishedAt:i.publishedAt,fetchedAt:c,status:i.status,replyText:i.replyText}),r++);return await Yt(e.env.KV,t,new Date().toISOString()),e.json({success:!0,data:{newComments:r,existingComments:a,total:s.length,channelId:t},message:`${r}\uAC1C\uC758 \uC0C8 \uB313\uAE00\uC744 \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.`})}catch(s){return console.error("Fetch error:",s),e.json({success:!1,error:s instanceof Error?s.message:"Failed to fetch comments"},500)}});v.post("/:id/classify",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);try{let s=await $(e.env.KV,t,"unclassified");if(s.length===0)return e.json({success:!0,data:{classified:0,channelId:t},message:"\uBD84\uB958\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."});let r=o.settings,a=0,c=[],i=un(n);for(let l of s)try{let d=await M(e.env,l.text,i);await C(e.env.KV,t,l.id,{type:d.type,attitude:r.attitudeMap[d.type],status:"pending"}),a++}catch(d){console.error(`Classify error for ${l.id}:`,d),c.push(`${l.id}: ${d instanceof Error?d.message:"Unknown error"}`)}return e.json({success:!0,data:{classified:a,total:s.length,errors:c.length>0?c:void 0,channelId:t},message:`${a}\uAC1C\uC758 \uB313\uAE00\uC744 \uBD84\uB958\uD588\uC2B5\uB2C8\uB2E4.`})}catch(s){return console.error("Classify error:",s),e.json({success:!1,error:s instanceof Error?s.message:"Failed to classify comments"},500)}});v.post("/:id/generate",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);try{let s=await $(e.env.KV,t,"pending");if(s.length===0)return e.json({success:!0,data:{generated:0,channelId:t},message:"\uC751\uB2F5\uC744 \uC0DD\uC131\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."});let r=o.settings,a=un(n),c=0,i=[],l=await q(e.env,s,r,a);for(let d of s){let p=l.get(d.id);if(p)try{await C(e.env.KV,t,d.id,{status:"generated",replyText:p,generatedAt:new Date().toISOString()}),c++}catch(m){console.error(`Update error for ${d.id}:`,m),i.push(`${d.id}: ${m instanceof Error?m.message:"Update failed"}`)}else i.push(`${d.id}: \uC751\uB2F5 \uC0DD\uC131 \uC2E4\uD328`)}return e.json({success:!0,data:{generated:c,total:s.length,errors:i.length>0?i:void 0,channelId:t},message:`${c}\uAC1C\uC758 \uC751\uB2F5\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4. \uD655\uC778 \uD6C4 \uC2B9\uC778\uD574\uC8FC\uC138\uC694.`})}catch(s){return console.error("Generate error:",s),e.json({success:!1,error:s instanceof Error?s.message:"Failed to generate replies"},500)}});v.put("/:id/comments/:commentId/reply",async e=>{let t=e.req.param("id"),n=e.req.param("commentId"),o=e.get("user"),s=await h(e.env.KV,t);if(!s)return e.json({success:!1,error:"Channel not found"},404);if(s.userId!==o.id)return e.json({success:!1,error:"Access denied"},403);try{let r=await e.req.json();return!r.replyText||r.replyText.trim()===""?e.json({success:!1,error:"\uC751\uB2F5 \uB0B4\uC6A9\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694."},400):await P(e.env.KV,t,n)?(await C(e.env.KV,t,n,{replyText:r.replyText.trim(),generatedAt:new Date().toISOString()}),e.json({success:!0,message:"\uC751\uB2F5\uC774 \uC218\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})):e.json({success:!1,error:"\uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404)}catch(r){return console.error(`Edit reply error for ${n}:`,r),e.json({success:!1,error:r instanceof Error?r.message:"Failed to edit reply"},500)}});v.delete("/:id/comments/:commentId/reply",async e=>{let t=e.req.param("id"),n=e.req.param("commentId"),o=e.get("user"),s=await h(e.env.KV,t);if(!s)return e.json({success:!1,error:"Channel not found"},404);if(s.userId!==o.id)return e.json({success:!1,error:"Access denied"},403);try{return await P(e.env.KV,t,n)?(await C(e.env.KV,t,n,{status:"pending",replyText:void 0,generatedAt:void 0}),e.json({success:!0,message:'\uC751\uB2F5\uC774 \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uB313\uAE00\uC774 "\uBBF8\uC751\uB2F5" \uC0C1\uD0DC\uB85C \uB3CC\uC544\uAC14\uC2B5\uB2C8\uB2E4.'})):e.json({success:!1,error:"\uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404)}catch(r){return console.error(`Delete reply error for ${n}:`,r),e.json({success:!1,error:r instanceof Error?r.message:"Failed to delete reply"},500)}});v.post("/:id/comments/:commentId/approve",async e=>{let t=e.req.param("id"),n=e.req.param("commentId"),o=e.get("user"),s=await h(e.env.KV,t);if(!s)return e.json({success:!1,error:"Channel not found"},404);if(s.userId!==o.id)return e.json({success:!1,error:"Access denied"},403);try{let r=await P(e.env.KV,t,n);return r?r.status!=="generated"?e.json({success:!1,error:"\uC0DD\uC131\uB41C \uC751\uB2F5\uC774 \uC788\uB294 \uB313\uAE00\uB9CC \uC2B9\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."},400):r.replyText?(await L(e.env,r.id,r.replyText,s),await C(e.env.KV,t,n,{status:"replied",repliedAt:new Date().toISOString()}),e.json({success:!0,message:"\uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."})):e.json({success:!1,error:"\uC0DD\uC131\uB41C \uC751\uB2F5\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."},400):e.json({success:!1,error:"\uC2B9\uC778\uD560 \uB313\uAE00\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."},404)}catch(r){return console.error(`Approve error for ${n}:`,r),e.json({success:!1,error:r instanceof Error?r.message:"Failed to approve comment"},500)}});v.post("/:id/approve-all",async e=>{let t=e.req.param("id"),n=e.get("user"),o=await h(e.env.KV,t);if(!o)return e.json({success:!1,error:"Channel not found"},404);if(o.userId!==n.id)return e.json({success:!1,error:"Access denied"},403);try{let s=await $(e.env.KV,t,"generated");if(s.length===0)return e.json({success:!0,data:{approved:0,channelId:t},message:"\uC2B9\uC778\uD560 \uB313\uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."});let r=0,a=[];for(let c of s)try{if(!c.replyText)continue;await L(e.env,c.id,c.replyText,o),await C(e.env.KV,t,c.id,{status:"replied",repliedAt:new Date().toISOString()}),r++}catch(i){console.error(`Approve error for ${c.id}:`,i),a.push(`${c.id}: ${i instanceof Error?i.message:"Unknown error"}`)}return await A(e.env.KV,t,{lastApprovedAt:new Date().toISOString()}),e.json({success:!0,data:{approved:r,total:s.length,errors:a.length>0?a:void 0,channelId:t},message:`${r}\uAC1C\uC758 \uB313\uAE00\uC774 YouTube\uC5D0 \uAC8C\uC2DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`})}catch(s){return console.error("Approve-all error:",s),e.json({success:!1,error:s instanceof Error?s.message:"Failed to approve comments"},500)}});var mn=v;we();function gn(e,t,n="Asia/Seoul"){if(!e||!t)return!1;let o=new Date,a=new Intl.DateTimeFormat("en-US",{timeZone:n,hour:"2-digit",minute:"2-digit",hour12:!1}).format(o).split(":"),c=parseInt(a[0]||"0",10)*60+parseInt(a[1]||"0",10),i=e.split(":"),l=parseInt(i[0]||"0",10)*60+parseInt(i[1]||"0",10),d=t.split(":"),p=parseInt(d[0]||"0",10)*60+parseInt(d[1]||"0",10);return l>p?c>=l||c<p:c>=l&&c<p}function ko(e,t){let n=new Date,r=new Intl.DateTimeFormat("en-US",{timeZone:t,hour:"2-digit",minute:"2-digit",hour12:!1}).format(n).split(":"),a=parseInt(r[0]||"0",10),c=parseInt(r[1]||"0",10),i=a*60+c;for(let l of e){let d=l.split(":"),p=parseInt(d[0]||"0",10),m=parseInt(d[1]||"0",10),g=p*60+m,u=Math.abs(i-g);if(u<=15||u>=24*60-15)return!0}return!1}async function fn(e,t){if(t.needsReauth)return console.log(`[${t.youtube.channelTitle}] Needs re-auth, skipping`),null;let n=new Date(t.youtube.expiresAt),o=new Date;if(n.getTime()-o.getTime()<5*60*1e3){console.log(`[${t.youtube.channelTitle}] Refreshing token...`);try{let s=await Ge(e,t.youtube.refreshToken),r={...t,youtube:{...t.youtube,accessToken:s.accessToken,expiresAt:s.expiresAt},needsReauth:!1,lastError:void 0};return await A(e.KV,t.id,{youtube:r.youtube,needsReauth:!1,lastError:void 0}),r}catch(s){let r=s instanceof Error?s.message:"Unknown error";return console.error(`[${t.youtube.channelTitle}] Token refresh failed: ${r}`),await A(e.KV,t.id,{needsReauth:!0,lastError:`\uD1A0\uD070 \uAC31\uC2E0 \uC2E4\uD328: ${r}`,isActive:!1}),null}}return t}async function To(e,t){let n={fetched:0,classified:0,generated:0};try{if(gn(t.schedule.pauseStart,t.schedule.pauseEnd,t.schedule.timezone))return console.log(`[${t.youtube.channelTitle}] In pause time, skipping fetch`),n.skipped="pause_time",n;let o=await fn(e,t);if(!o)return n.skipped="needs_reauth",n;t=o,console.log(`[${t.youtube.channelTitle}] Fetching comments...`);let s=await te(e,t);for(let i of s){if(await xe(e.KV,t.id,i.id))continue;let l={...i,channelId:t.id,status:"unclassified",fetchedAt:new Date().toISOString()};await ye(e.KV,t.id,l),n.fetched++}console.log(`[${t.youtube.channelTitle}] Fetched ${n.fetched} new comments`);let r=await $(e.KV,t.id,"unclassified");for(let i of r)try{let l=await M(e,i.text);await C(e.KV,t.id,i.id,{type:l.type,attitude:t.settings.attitudeMap[l.type],status:"pending"}),n.classified++}catch(l){console.error(`[${t.youtube.channelTitle}] Failed to classify ${i.id}:`,l)}console.log(`[${t.youtube.channelTitle}] Classified ${n.classified} comments`);let c=(await $(e.KV,t.id,"pending")).filter(i=>{let l=i.type||"other",d=t.settings.typeInstructions?.[l];return!d||d.enabled!==!1});if(c.length>0){let i=await q(e,c,t.settings);for(let[l,d]of i)await C(e.KV,t.id,l,{status:"generated",replyText:d,generatedAt:new Date().toISOString()}),n.generated++}console.log(`[${t.youtube.channelTitle}] Generated ${n.generated} replies`),await A(e.KV,t.id,{lastFetchedAt:new Date().toISOString()})}catch(o){console.error(`[${t.youtube.channelTitle}] Process failed:`,o)}return n}async function Io(e,t){let n=0;try{if(gn(t.schedule.pauseStart,t.schedule.pauseEnd,t.schedule.timezone))return console.log(`[${t.youtube.channelTitle}] In pause time, skipping approve`),0;let o=await fn(e,t);if(!o)return 0;t=o;let s=await $(e.KV,t.id,"generated");if(s.length===0)return 0;let r=new Date,a=t.schedule.approveAfterHours,c=s.filter(i=>{if(!a||!i.generatedAt)return!0;let l=new Date(i.generatedAt);return(r.getTime()-l.getTime())/(1e3*60*60)>=a});if(c.length===0)return console.log(`[${t.youtube.channelTitle}] No comments ready for approval (${s.length} waiting for ${a}h)`),0;console.log(`[${t.youtube.channelTitle}] Approving ${c.length}/${s.length} replies...`);for(let i of c)if(i.replyText)try{await Xe(e,t,i.id,i.replyText),await C(e.KV,t.id,i.id,{status:"replied",repliedAt:new Date().toISOString()}),n++,await new Promise(l=>setTimeout(l,1e3))}catch(l){console.error(`[${t.youtube.channelTitle}] Failed to post reply for ${i.id}:`,l)}await A(e.KV,t.id,{lastApprovedAt:new Date().toISOString()}),console.log(`[${t.youtube.channelTitle}] Approved ${n} replies`)}catch(o){console.error(`[${t.youtube.channelTitle}] Approve failed:`,o)}return n}async function hn(e){console.log("=== Fetch Schedule Started ===");let t=await Ye(e.KV);console.log(`Found ${t.length} active channels`);for(let n of t){let o=new Date,s=n.lastFetchedAt?new Date(n.lastFetchedAt):null,r=!0;if(s){let a=(o.getTime()-s.getTime())/6e4;switch(n.schedule.fetchInterval){case"every15min":r=a>=14;break;case"every30min":r=a>=29;break;case"hourly":default:r=a>=59;break}}r?await To(e,n):console.log(`[${n.youtube.channelTitle}] Skipping (not due yet)`)}console.log("=== Fetch Schedule Completed ===")}async function bn(e){console.log("=== Approve Schedule Started ===");let t=await Ye(e.KV);console.log(`Found ${t.length} active channels`);for(let n of t){if(!n.schedule.autoApprove){console.log(`[${n.youtube.channelTitle}] Auto-approve disabled, skipping`);continue}if(!ko(n.schedule.approveTimes,n.schedule.timezone)){console.log(`[${n.youtube.channelTitle}] Not approve time, skipping`);continue}if(n.lastApprovedAt){let o=new Date(n.lastApprovedAt);if((new Date().getTime()-o.getTime())/(1e3*60)<30){console.log(`[${n.youtube.channelTitle}] Already approved recently, skipping`);continue}}await Io(e,n)}console.log("=== Approve Schedule Completed ===")}var Ie=new k;Ie.use("*",async(e,t)=>{let n=e.req.header("X-Cron-Secret"),o=e.env.JWT_SECRET;return!n||n!==o?e.json({success:!1,error:"Unauthorized"},401):t()});Ie.post("/fetch",async e=>{console.log("Schedule API: fetch called");try{return await hn(e.env),e.json({success:!0,message:"Fetch schedule completed"})}catch(t){return console.error("Fetch schedule error:",t),e.json({success:!1,error:t instanceof Error?t.message:"Unknown error"},500)}});Ie.post("/approve",async e=>{console.log("Schedule API: approve called");try{return await bn(e.env),e.json({success:!0,message:"Approve schedule completed"})}catch(t){return console.error("Approve schedule error:",t),e.json({success:!1,error:t instanceof Error?t.message:"Unknown error"},500)}});var yn=Ie;async function vn(e,t){let{currentChannel:n,userChannels:o=[],user:s}=t||{},r=n?await ve(e.KV,n.id):await fe(e.KV),a=n?await Ht(e.KV,n.id):await ee(e.KV),c=!!s?.openrouterApiKey;return`<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -5649,20 +1229,20 @@ async function renderDashboard(env, props) {
         <div class="channel-selector">
           <button class="channel-selector-btn" onclick="toggleChannelDropdown()">
             <span class="channel-icon">\u{1F3AC}</span>
-            <span>${currentChannel ? escapeHtml(currentChannel.youtube.channelTitle) : "\uCC44\uB110 \uC120\uD0DD"}</span>
+            <span>${n?xn(n.youtube.channelTitle):"\uCC44\uB110 \uC120\uD0DD"}</span>
             <span class="arrow">\u25BC</span>
           </button>
           <div class="channel-dropdown" id="channelDropdown">
             <div class="channel-dropdown-header">\uB0B4 \uCC44\uB110</div>
-            ${userChannels.length > 0 ? userChannels.map((ch) => `
-              <a href="/channels/${ch.id}" class="channel-dropdown-item ${currentChannel?.id === ch.id ? "active" : ""}">
+            ${o.length>0?o.map(i=>`
+              <a href="/channels/${i.id}" class="channel-dropdown-item ${n?.id===i.id?"active":""}">
                 <span class="icon">\u{1F3AC}</span>
                 <div class="info">
-                  <div class="name">${escapeHtml(ch.youtube.channelTitle)}</div>
-                  <div class="stats">${ch.isActive ? "\uD65C\uC131" : "\uBE44\uD65C\uC131"}</div>
+                  <div class="name">${xn(i.youtube.channelTitle)}</div>
+                  <div class="stats">${i.isActive?"\uD65C\uC131":"\uBE44\uD65C\uC131"}</div>
                 </div>
               </a>
-            `).join("") : `
+            `).join(""):`
               <div class="channel-dropdown-item" style="color: #666; cursor: default;">
                 \uB4F1\uB85D\uB41C \uCC44\uB110\uC774 \uC5C6\uC2B5\uB2C8\uB2E4
               </div>
@@ -5680,14 +1260,14 @@ async function renderDashboard(env, props) {
       </div>
       <div style="display: flex; align-items: center; gap: 15px;">
         <span class="last-fetch">
-          \uB9C8\uC9C0\uB9C9 \uB3D9\uAE30\uD654: ${lastFetchedAt ? new Date(lastFetchedAt).toLocaleString("ko-KR") : "\uC5C6\uC74C"}
+          \uB9C8\uC9C0\uB9C9 \uB3D9\uAE30\uD654: ${a?new Date(a).toLocaleString("ko-KR"):"\uC5C6\uC74C"}
         </span>
         <a href="/settings" class="btn-oauth" title="\uACC4\uC815 \uC124\uC815 (API Key, \uD504\uB85C\uD544)">\u2699\uFE0F \uACC4\uC815</a>
         <button onclick="logout()" class="btn-oauth" style="background: transparent; border: 1px solid #333; cursor: pointer;">\u{1F6AA} \uB85C\uADF8\uC544\uC6C3</button>
       </div>
     </header>
 
-    ${!hasApiKey ? `
+    ${c?"":`
     <!-- API Key \uBBF8\uC124\uC815 \uACBD\uACE0 \uBC30\uB108 -->
     <div class="warning-banner">
       <div class="warning-content">
@@ -5699,55 +1279,55 @@ async function renderDashboard(env, props) {
       </div>
       <a href="/settings" class="warning-btn">API Key \uC124\uC815\uD558\uAE30 \u2192</a>
     </div>
-    ` : ""}
+    `}
 
     <!-- \uC6CC\uD06C\uD50C\uB85C\uC6B0 \uC548\uB0B4 -->
     <div class="workflow-guide">
-      <div class="workflow-step ${stats.total === 0 ? "current" : "done"}">
+      <div class="workflow-step ${r.total===0?"current":"done"}">
         <span class="step-num">1</span>
         <span class="step-label">\uB313\uAE00 \uAC00\uC838\uC624\uAE30</span>
-        ${stats.total > 0 ? `<span class="step-count">${stats.total}\uAC1C</span>` : ""}
+        ${r.total>0?`<span class="step-count">${r.total}\uAC1C</span>`:""}
       </div>
       <div class="workflow-arrow">\u2192</div>
-      <div class="workflow-step ${stats.total > 0 && stats.unclassified > 0 ? "current" : stats.unclassified === 0 && stats.total > 0 ? "done" : ""}">
+      <div class="workflow-step ${r.total>0&&r.unclassified>0?"current":r.unclassified===0&&r.total>0?"done":""}">
         <span class="step-num">2</span>
         <span class="step-label">\uBD84\uB958</span>
-        ${stats.unclassified > 0 ? `<span class="step-count warning">${stats.unclassified}\uAC1C \uB300\uAE30</span>` : ""}
+        ${r.unclassified>0?`<span class="step-count warning">${r.unclassified}\uAC1C \uB300\uAE30</span>`:""}
       </div>
       <div class="workflow-arrow">\u2192</div>
-      <div class="workflow-step ${stats.pending > 0 ? "current" : stats.generated > 0 || stats.replied > 0 ? "done" : ""}">
+      <div class="workflow-step ${r.pending>0?"current":r.generated>0||r.replied>0?"done":""}">
         <span class="step-num">3</span>
         <span class="step-label">\uC751\uB2F5 \uC0DD\uC131</span>
-        ${stats.pending > 0 ? `<span class="step-count warning">${stats.pending}\uAC1C \uB300\uAE30</span>` : ""}
+        ${r.pending>0?`<span class="step-count warning">${r.pending}\uAC1C \uB300\uAE30</span>`:""}
       </div>
       <div class="workflow-arrow">\u2192</div>
-      <div class="workflow-step ${stats.generated > 0 ? "current" : stats.replied > 0 ? "done" : ""}">
+      <div class="workflow-step ${r.generated>0?"current":r.replied>0?"done":""}">
         <span class="step-num">4</span>
         <span class="step-label">\uC2B9\uC778</span>
-        ${stats.generated > 0 ? `<span class="step-count warning">${stats.generated}\uAC1C \uB300\uAE30</span>` : ""}
+        ${r.generated>0?`<span class="step-count warning">${r.generated}\uAC1C \uB300\uAE30</span>`:""}
       </div>
     </div>
 
     <div class="stats">
       <div class="stat-card">
         <h3>\uC804\uCCB4 \uB313\uAE00</h3>
-        <div class="value">${stats.total}</div>
+        <div class="value">${r.total}</div>
       </div>
       <div class="stat-card">
         <h3>\uBBF8\uBD84\uB958</h3>
-        <div class="value unclassified">${stats.unclassified}</div>
+        <div class="value unclassified">${r.unclassified}</div>
       </div>
       <div class="stat-card">
         <h3>\uBBF8\uC751\uB2F5</h3>
-        <div class="value pending">${stats.pending}</div>
+        <div class="value pending">${r.pending}</div>
       </div>
       <div class="stat-card">
         <h3>\uC2B9\uC778\uB300\uAE30</h3>
-        <div class="value generated">${stats.generated}</div>
+        <div class="value generated">${r.generated}</div>
       </div>
       <div class="stat-card">
         <h3>\uC751\uB2F5\uC644\uB8CC</h3>
-        <div class="value replied">${stats.replied}</div>
+        <div class="value replied">${r.replied}</div>
       </div>
     </div>
 
@@ -5756,11 +1336,11 @@ async function renderDashboard(env, props) {
         \u{1F4E5} \uB313\uAE00 \uAC00\uC838\uC624\uAE30
         <span class="loading" id="fetchLoading">\u23F3</span>
       </button>
-      <button class="btn-classify" id="classifyBtn" onclick="classifyComments()" ${!hasApiKey ? 'disabled title="API Key\uB97C \uBA3C\uC800 \uC124\uC815\uD558\uC138\uC694"' : ""}>
+      <button class="btn-classify" id="classifyBtn" onclick="classifyComments()" ${c?"":'disabled title="API Key\uB97C \uBA3C\uC800 \uC124\uC815\uD558\uC138\uC694"'}>
         \u{1F3F7}\uFE0F \uC790\uB3D9 \uBD84\uB958
         <span class="loading" id="classifyLoading">\u23F3</span>
       </button>
-      <button class="btn-generate" id="generateBtn" onclick="generateReplies()" ${!hasApiKey ? 'disabled title="API Key\uB97C \uBA3C\uC800 \uC124\uC815\uD558\uC138\uC694"' : ""}>
+      <button class="btn-generate" id="generateBtn" onclick="generateReplies()" ${c?"":'disabled title="API Key\uB97C \uBA3C\uC800 \uC124\uC815\uD558\uC138\uC694"'}>
         \u270D\uFE0F \uC751\uB2F5 \uC0DD\uC131
         <span class="loading" id="generateLoading">\u23F3</span>
       </button>
@@ -5771,11 +1351,11 @@ async function renderDashboard(env, props) {
     </div>
 
     <!-- \uC2B9\uC778 \uB300\uAE30 \uC139\uC158 -->
-    <div class="pending-approval-section" id="pendingApprovalSection" style="display: ${stats.generated > 0 ? "block" : "none"};">
+    <div class="pending-approval-section" id="pendingApprovalSection" style="display: ${r.generated>0?"block":"none"};">
       <div class="pending-approval-header">
         <h2>
           \u23F3 \uC2B9\uC778 \uB300\uAE30 \uC911
-          <span class="count" id="pendingCount">${stats.generated}</span>
+          <span class="count" id="pendingCount">${r.generated}</span>
         </h2>
         <button class="btn-approve" onclick="approveAll()" style="padding: 8px 16px; font-size: 14px;">
           \u2705 \uBAA8\uB450 \uC2B9\uC778
@@ -5878,7 +1458,7 @@ async function renderDashboard(env, props) {
 
   <script>
     // \uD604\uC7AC \uCC44\uB110 ID (\uCC44\uB110\uBCC4 API \uD638\uCD9C\uC5D0 \uC0AC\uC6A9)
-    const channelId = '${currentChannel?.id || ""}';
+    const channelId = '${n?.id||""}';
 
     let currentPage = 1;
     let currentStatus = 'all';
@@ -6623,15 +2203,7 @@ async function renderDashboard(env, props) {
     }
   <\/script>
 </body>
-</html>`;
-}
-function escapeHtml(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-
-// src/views/login.ts
-function renderLogin() {
-  return `<!DOCTYPE html>
+</html>`}function xn(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}function wn(){return`<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -6981,25 +2553,40 @@ function renderLogin() {
           body: JSON.stringify({ email, password })
         });
 
+        // HTTP \uC5D0\uB7EC \uCCB4\uD06C
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          showError(errorData.error || '\uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. (HTTP ' + res.status + ')');
+          return;
+        }
+
         const data = await res.json();
 
         if (data.success && data.token) {
           // \uD1A0\uD070 \uC800\uC7A5
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
+          try {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          } catch (storageErr) {
+            console.error('localStorage \uC800\uC7A5 \uC2E4\uD328:', storageErr);
+            // localStorage \uC2E4\uD328\uD574\uB3C4 \uCFE0\uD0A4\uB85C \uC9C4\uD589
+          }
 
           // \uCFE0\uD0A4\uC5D0\uB3C4 \uC800\uC7A5 (\uB300\uC2DC\uBCF4\uB4DC \uC811\uADFC\uC6A9)
-          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60);
+          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60) + '; SameSite=Lax';
 
           showSuccess('\uB85C\uADF8\uC778 \uC131\uACF5! \uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4...');
+
+          // \uC989\uC2DC \uC774\uB3D9 \uC2DC\uB3C4, \uC2E4\uD328 \uC2DC 1\uCD08 \uD6C4 \uC7AC\uC2DC\uB3C4
           setTimeout(() => {
             window.location.href = '/channels';
-          }, 1000);
+          }, 500);
         } else {
           showError(data.error || '\uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.');
         }
       } catch (err) {
-        showError('\uC11C\uBC84 \uC5F0\uACB0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.');
+        console.error('\uB85C\uADF8\uC778 \uC5D0\uB7EC:', err);
+        showError('\uC11C\uBC84 \uC5F0\uACB0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. (' + (err.message || '\uC54C \uC218 \uC5C6\uB294 \uC624\uB958') + ')');
       } finally {
         setLoading('login-btn', false);
       }
@@ -7022,25 +2609,37 @@ function renderLogin() {
           body: JSON.stringify({ name, email, password })
         });
 
+        // HTTP \uC5D0\uB7EC \uCCB4\uD06C
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          showError(errorData.error || '\uD68C\uC6D0\uAC00\uC785\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. (HTTP ' + res.status + ')');
+          return;
+        }
+
         const data = await res.json();
 
         if (data.success && data.token) {
           // \uD1A0\uD070 \uC800\uC7A5
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
+          try {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          } catch (storageErr) {
+            console.error('localStorage \uC800\uC7A5 \uC2E4\uD328:', storageErr);
+          }
 
           // \uCFE0\uD0A4\uC5D0\uB3C4 \uC800\uC7A5
-          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60);
+          document.cookie = 'token=' + data.token + '; path=/; max-age=' + (7 * 24 * 60 * 60) + '; SameSite=Lax';
 
           showSuccess('\uD68C\uC6D0\uAC00\uC785 \uC131\uACF5! \uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4...');
           setTimeout(() => {
             window.location.href = '/channels';
-          }, 1000);
+          }, 500);
         } else {
           showError(data.error || '\uD68C\uC6D0\uAC00\uC785\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.');
         }
       } catch (err) {
-        showError('\uC11C\uBC84 \uC5F0\uACB0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.');
+        console.error('\uD68C\uC6D0\uAC00\uC785 \uC5D0\uB7EC:', err);
+        showError('\uC11C\uBC84 \uC5F0\uACB0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. (' + (err.message || '\uC54C \uC218 \uC5C6\uB294 \uC624\uB958') + ')');
       } finally {
         setLoading('signup-btn', false);
       }
@@ -7085,13 +2684,7 @@ function renderLogin() {
     };
   <\/script>
 </body>
-</html>`;
-}
-
-// src/views/channels.ts
-function renderChannelList(user2, channels2) {
-  const hasApiKey = !!user2.openrouterApiKey;
-  return `<!DOCTYPE html>
+</html>`}function kn(e,t){let n=!!e.openrouterApiKey;return`<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -7618,7 +3211,7 @@ function renderChannelList(user2, channels2) {
     <header>
       <div class="header-left">
         <h1>Autonomey</h1>
-        <p class="welcome">\u{1F44B} ${escapeHtml2(user2.name)}\uB2D8, \uD658\uC601\uD569\uB2C8\uB2E4</p>
+        <p class="welcome">\u{1F44B} ${st(e.name)}\uB2D8, \uD658\uC601\uD569\uB2C8\uB2E4</p>
       </div>
       <div class="header-right">
         <a href="/channels" class="nav-link active">\u{1F4CB} \uCC44\uB110 \uBAA9\uB85D</a>
@@ -7627,18 +3220,7 @@ function renderChannelList(user2, channels2) {
       </div>
     </header>
 
-    ${!hasApiKey ? `
-    <div class="api-key-banner warning">
-      <div class="message">
-        <span class="icon">\u26A0\uFE0F</span>
-        <div class="text">
-          <h3>OpenRouter API Key\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4</h3>
-          <p>AI \uBD84\uB958 \uBC0F \uC751\uB2F5 \uC0DD\uC131 \uAE30\uB2A5\uC744 \uC0AC\uC6A9\uD558\uB824\uBA74 API Key\uB97C \uC124\uC815\uD574\uC8FC\uC138\uC694. \uB313\uAE00 \uC218\uC9D1/\uAC8C\uC2DC\uB294 \uAC00\uB2A5\uD569\uB2C8\uB2E4.</p>
-        </div>
-      </div>
-      <a href="/settings" class="btn btn-primary">API Key \uC124\uC815\uD558\uAE30</a>
-    </div>
-    ` : `
+    ${n?`
     <div class="api-key-banner">
       <div class="message">
         <span class="icon">\u2705</span>
@@ -7649,11 +3231,22 @@ function renderChannelList(user2, channels2) {
       </div>
       <a href="/settings" class="btn btn-secondary">\uC124\uC815 \uBCC0\uACBD</a>
     </div>
+    `:`
+    <div class="api-key-banner warning">
+      <div class="message">
+        <span class="icon">\u26A0\uFE0F</span>
+        <div class="text">
+          <h3>OpenRouter API Key\uAC00 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4</h3>
+          <p>AI \uBD84\uB958 \uBC0F \uC751\uB2F5 \uC0DD\uC131 \uAE30\uB2A5\uC744 \uC0AC\uC6A9\uD558\uB824\uBA74 API Key\uB97C \uC124\uC815\uD574\uC8FC\uC138\uC694. \uB313\uAE00 \uC218\uC9D1/\uAC8C\uC2DC\uB294 \uAC00\uB2A5\uD569\uB2C8\uB2E4.</p>
+        </div>
+      </div>
+      <a href="/settings" class="btn btn-primary">API Key \uC124\uC815\uD558\uAE30</a>
+    </div>
     `}
 
     <h2 class="section-title">\u{1F4FA} \uB0B4 \uCC44\uB110</h2>
 
-    ${channels2.length === 0 ? `
+    ${t.length===0?`
     <!-- \uCCAB \uBC29\uBB38 \uC628\uBCF4\uB529 \uAC00\uC774\uB4DC -->
     <div class="onboarding-guide">
       <div class="onboarding-header">
@@ -7662,23 +3255,23 @@ function renderChannelList(user2, channels2) {
       </div>
 
       <div class="onboarding-steps">
-        <div class="step ${hasApiKey ? "completed" : "current"}">
-          <div class="step-number">${hasApiKey ? "\u2713" : "1"}</div>
+        <div class="step ${n?"completed":"current"}">
+          <div class="step-number">${n?"\u2713":"1"}</div>
           <div class="step-content">
             <h3>OpenRouter API Key \uC124\uC815</h3>
             <p>AI \uBD84\uB958 \uBC0F \uC751\uB2F5 \uC0DD\uC131\uC5D0 \uD544\uC694\uD569\uB2C8\uB2E4</p>
-            ${!hasApiKey ? `<a href="/settings" class="btn btn-primary btn-sm">\uC124\uC815\uD558\uB7EC \uAC00\uAE30</a>` : `<span class="step-done">\uC644\uB8CC\uB428</span>`}
+            ${n?'<span class="step-done">\uC644\uB8CC\uB428</span>':'<a href="/settings" class="btn btn-primary btn-sm">\uC124\uC815\uD558\uB7EC \uAC00\uAE30</a>'}
           </div>
         </div>
 
-        <div class="step-connector ${hasApiKey ? "" : "disabled"}"></div>
+        <div class="step-connector ${n?"":"disabled"}"></div>
 
-        <div class="step ${hasApiKey ? "current" : "disabled"}">
+        <div class="step ${n?"current":"disabled"}">
           <div class="step-number">2</div>
           <div class="step-content">
             <h3>YouTube \uCC44\uB110 \uC5F0\uB3D9</h3>
             <p>\uB313\uAE00\uC744 \uAC00\uC838\uC62C \uCC44\uB110\uC744 \uC5F0\uACB0\uD569\uB2C8\uB2E4</p>
-            ${hasApiKey ? `<a href="/oauth/start" class="btn btn-primary btn-sm">\uCC44\uB110 \uC5F0\uB3D9\uD558\uAE30</a>` : `<span class="step-locked">\u{1F512} 1\uB2E8\uACC4\uB97C \uBA3C\uC800 \uC644\uB8CC\uD558\uC138\uC694</span>`}
+            ${n?'<a href="/oauth/start" class="btn btn-primary btn-sm">\uCC44\uB110 \uC5F0\uB3D9\uD558\uAE30</a>':'<span class="step-locked">\u{1F512} 1\uB2E8\uACC4\uB97C \uBA3C\uC800 \uC644\uB8CC\uD558\uC138\uC694</span>'}
           </div>
         </div>
 
@@ -7694,32 +3287,32 @@ function renderChannelList(user2, channels2) {
         </div>
       </div>
     </div>
-    ` : `
+    `:`
     <div class="channels-grid">
-      ${channels2.map((channel) => `
-        <a href="/channels/${channel.id}" class="channel-card">
+      ${t.map(o=>`
+        <a href="/channels/${o.id}" class="channel-card">
           <div class="channel-header">
             <div class="channel-info">
-              <h3>\u{1F3AC} ${escapeHtml2(channel.youtube.channelTitle)}</h3>
-              <span class="channel-id">${channel.youtube.channelId}</span>
+              <h3>\u{1F3AC} ${st(o.youtube.channelTitle)}</h3>
+              <span class="channel-id">${o.youtube.channelId}</span>
             </div>
-            <span class="channel-status ${channel.isActive ? "active" : "inactive"}">
-              ${channel.isActive ? "\uD65C\uC131" : "\uBE44\uD65C\uC131"}
+            <span class="channel-status ${o.isActive?"active":"inactive"}">
+              ${o.isActive?"\uD65C\uC131":"\uBE44\uD65C\uC131"}
             </span>
           </div>
           <div class="channel-stats">
             <div class="stat-item">
               <div class="label">\uBBF8\uC751\uB2F5</div>
-              <div class="value pending">${channel.stats?.pending || 0}</div>
+              <div class="value pending">${o.stats?.pending||0}</div>
             </div>
             <div class="stat-item">
               <div class="label">\uC2B9\uC778\uB300\uAE30</div>
-              <div class="value generated">${channel.stats?.generated || 0}</div>
+              <div class="value generated">${o.stats?.generated||0}</div>
             </div>
           </div>
           <div class="channel-schedule">
-            <span>\u23F0 ${getScheduleLabel(channel.schedule.fetchInterval)}</span>
-            ${channel.schedule.autoApprove ? `<span style="margin-left: 12px;">\u{1F916} \uC790\uB3D9\uC2B9\uC778</span>` : `<span style="margin-left: 12px;">\u270B \uC218\uB3D9\uC2B9\uC778</span>`}
+            <span>\u23F0 ${An(o.schedule.fetchInterval)}</span>
+            ${o.schedule.autoApprove?'<span style="margin-left: 12px;">\u{1F916} \uC790\uB3D9\uC2B9\uC778</span>':'<span style="margin-left: 12px;">\u270B \uC218\uB3D9\uC2B9\uC778</span>'}
           </div>
         </a>
       `).join("")}
@@ -7730,27 +3323,27 @@ function renderChannelList(user2, channels2) {
       </a>
     </div>
 
-    ${channels2.length > 0 ? `
+    ${t.length>0?`
     <h2 class="section-title">\u23F0 \uC790\uB3D9\uD654 \uD604\uD669</h2>
     <div class="automation-section">
       <div class="automation-list">
-        ${channels2.map((channel) => `
+        ${t.map(o=>`
           <div class="automation-item">
             <div>
-              <span class="channel-name">${escapeHtml2(channel.youtube.channelTitle)}</span>
+              <span class="channel-name">${st(o.youtube.channelTitle)}</span>
               <span class="schedule-info">
-                \u2022 ${getScheduleLabel(channel.schedule.fetchInterval)} \uC218\uC9D1
-                ${channel.schedule.autoApprove ? `, ${channel.schedule.approveTimes.join("/")} \uC2B9\uC778` : ", \uC218\uB3D9 \uC2B9\uC778"}
+                \u2022 ${An(o.schedule.fetchInterval)} \uC218\uC9D1
+                ${o.schedule.autoApprove?`, ${o.schedule.approveTimes.join("/")} \uC2B9\uC778`:", \uC218\uB3D9 \uC2B9\uC778"}
               </span>
             </div>
-            <span class="status-badge ${channel.isActive ? "running" : "paused"}">
-              ${channel.isActive ? "\uC2E4\uD589 \uC911" : "\uC77C\uC2DC\uC815\uC9C0"}
+            <span class="status-badge ${o.isActive?"running":"paused"}">
+              ${o.isActive?"\uC2E4\uD589 \uC911":"\uC77C\uC2DC\uC815\uC9C0"}
             </span>
           </div>
         `).join("")}
       </div>
     </div>
-    ` : ""}
+    `:""}
     `}
 
     <footer class="site-footer">
@@ -7784,26 +3377,7 @@ function renderChannelList(user2, channels2) {
     }
   <\/script>
 </body>
-</html>`;
-}
-function escapeHtml2(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-function getScheduleLabel(interval) {
-  const labels = {
-    "hourly": "\uB9E4\uC2DC\uAC04",
-    "every30min": "30\uBD84\uB9C8\uB2E4",
-    "every15min": "15\uBD84\uB9C8\uB2E4"
-  };
-  return labels[interval] || interval;
-}
-
-// src/views/settings.ts
-function renderSettings(props) {
-  const { user: user2, userChannels } = props;
-  const hasApiKey = !!user2.openrouterApiKey;
-  const maskedKey = hasApiKey ? user2.openrouterApiKey.slice(0, 8) + "..." + user2.openrouterApiKey.slice(-4) : "";
-  return `<!DOCTYPE html>
+</html>`}function st(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}function An(e){return{hourly:"\uB9E4\uC2DC\uAC04",every30min:"30\uBD84\uB9C8\uB2E4",every15min:"15\uBD84\uB9C8\uB2E4"}[e]||e}function Tn(e){let{user:t,userChannels:n}=e,o=!!t.openrouterApiKey,s=o?t.openrouterApiKey.slice(0,8)+"..."+t.openrouterApiKey.slice(-4):"";return`<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -8271,10 +3845,10 @@ function renderSettings(props) {
             <span class="arrow">\u25BC</span>
           </button>
           <div class="channel-dropdown" id="channelDropdown">
-            ${userChannels.map((ch) => `
-              <a href="/channels/${ch.id}" class="dropdown-item">
+            ${n.map(r=>`
+              <a href="/channels/${r.id}" class="dropdown-item">
                 <span class="channel-icon">\u{1F4FA}</span>
-                <span class="channel-name">${escapeHtml3(ch.youtube.channelTitle)}</span>
+                <span class="channel-name">${rt(r.youtube.channelTitle)}</span>
               </a>
             `).join("")}
             <a href="/oauth/start" class="dropdown-item add-new">
@@ -8307,15 +3881,15 @@ function renderSettings(props) {
       <div class="current-value">
         <div>
           <span style="color: #888; font-size: 13px;">\uD604\uC7AC \uC124\uC815:</span>
-          <span class="value ${hasApiKey ? "" : "none"}" id="currentKeyDisplay">
-            ${hasApiKey ? maskedKey : "\uC124\uC815\uB418\uC9C0 \uC54A\uC74C"}
+          <span class="value ${o?"":"none"}" id="currentKeyDisplay">
+            ${o?s:"\uC124\uC815\uB418\uC9C0 \uC54A\uC74C"}
           </span>
         </div>
         <div class="actions">
-          ${hasApiKey ? `
+          ${o?`
             <button class="btn btn-sm btn-text" onclick="toggleApiKeyForm()">\uBCC0\uACBD</button>
             <button class="btn btn-sm btn-text danger" onclick="removeApiKey()">\uC0AD\uC81C</button>
-          ` : `
+          `:`
             <button class="btn btn-sm btn-primary" onclick="toggleApiKeyForm()">\uC124\uC815\uD558\uAE30</button>
           `}
         </div>
@@ -8354,15 +3928,15 @@ function renderSettings(props) {
       <div class="profile-info">
         <div class="profile-row">
           <span class="label">\uC774\uB984</span>
-          <span class="value">${escapeHtml3(user2.name)}</span>
+          <span class="value">${rt(t.name)}</span>
         </div>
         <div class="profile-row">
           <span class="label">\uC774\uBA54\uC77C</span>
-          <span class="value">${escapeHtml3(user2.email)}</span>
+          <span class="value">${rt(t.email)}</span>
         </div>
         <div class="profile-row">
           <span class="label">\uAC00\uC785\uC77C</span>
-          <span class="value">${formatDate(user2.createdAt)}</span>
+          <span class="value">${Co(t.createdAt)}</span>
         </div>
       </div>
     </div>
@@ -8584,35 +4158,133 @@ function renderSettings(props) {
     }
   <\/script>
 </body>
-</html>`;
-}
-function escapeHtml3(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-function formatDate(isoString) {
-  const date = new Date(isoString);
-  return date.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric"
-  });
-}
-
-// src/views/landing.ts
-function renderLanding() {
-  return `<!DOCTYPE html>
+</html>`}function rt(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}function Co(e){return new Date(e).toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric"})}function In(e="https://autonomey.com"){return`<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Autonomey - YouTube \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 AI</title>
-  <meta name="description" content="AI\uAC00 \uB2F9\uC2E0\uC758 \uCC44\uB110 \uD1A4\uC5D0 \uB9DE\uCDB0 YouTube \uB313\uAE00\uC5D0 \uC790\uB3D9\uC73C\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4. \uBB34\uB8CC\uB85C \uC2DC\uC791\uD558\uC138\uC694.">
-  <meta name="keywords" content="YouTube, \uB313\uAE00, \uC790\uB3D9\uC751\uB2F5, AI, \uC720\uD29C\uBE0C, \uB313\uAE00\uAD00\uB9AC, \uC790\uB3D9\uD654">
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="Autonomey - YouTube \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 AI">
-  <meta property="og:description" content="AI\uAC00 \uB2F9\uC2E0\uC758 \uCC44\uB110 \uD1A4\uC5D0 \uB9DE\uCDB0 YouTube \uB313\uAE00\uC5D0 \uC790\uB3D9\uC73C\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4.">
+  <!-- Primary Meta Tags -->
+  <title>\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 AI | Autonomey - \uB313\uAE00 \uAD00\uB9AC \uC790\uB3D9\uD654 \uC2DC\uC2A4\uD15C</title>
+  <meta name="title" content="\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 AI | Autonomey - \uB313\uAE00 \uAD00\uB9AC \uC790\uB3D9\uD654 \uC2DC\uC2A4\uD15C">
+  <meta name="description" content="AI\uAC00 \uB2F9\uC2E0\uC758 \uCC44\uB110 \uD1A4\uC5D0 \uB9DE\uCDB0 YouTube \uB313\uAE00\uC5D0 \uC790\uB3D9\uC73C\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4. \uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9 \uD504\uB85C\uC81D\uD2B8\uC785\uB2C8\uB2E4. \uBB34\uB8CC\uB85C \uC0AC\uC6A9\uD558\uC138\uC694.">
+  <meta name="keywords" content="\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5, YouTube \uB313\uAE00 \uBD07, \uB313\uAE00 \uC790\uB3D9\uD654, AI \uB313\uAE00 \uAD00\uB9AC, \uC720\uD29C\uBE0C \uC790\uB3D9 \uC751\uB2F5 \uC2DC\uC2A4\uD15C, \uB313\uAE00 \uBD07, \uC720\uD29C\uBC84 \uB3C4\uAD6C, \uCC44\uB110 \uAD00\uB9AC, \uB313\uAE00 \uC790\uB3D9 \uBD84\uB958, AI \uC751\uB2F5 \uC0DD\uC131, \uC720\uD29C\uBE0C \uB9C8\uCF00\uD305 \uC790\uB3D9\uD654, \uD06C\uB9AC\uC5D0\uC774\uD130 \uB3C4\uAD6C">
+  <meta name="author" content="Autonomey">
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow">
+  <link rel="canonical" href="${e}/">
+
+  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
+  <meta property="og:url" content="${e}/">
+  <meta property="og:title" content="\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 AI | Autonomey">
+  <meta property="og:description" content="AI\uAC00 \uB2F9\uC2E0\uC758 \uCC44\uB110 \uD1A4\uC5D0 \uB9DE\uCDB0 YouTube \uB313\uAE00\uC5D0 \uC790\uB3D9\uC73C\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4. \uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9 \uD504\uB85C\uC81D\uD2B8\uC785\uB2C8\uB2E4.">
+  <meta property="og:image" content="${e}/og-image.png">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:site_name" content="Autonomey">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="${e}/">
+  <meta property="twitter:title" content="\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 AI | Autonomey">
+  <meta property="twitter:description" content="AI\uAC00 \uB2F9\uC2E0\uC758 \uCC44\uB110 \uD1A4\uC5D0 \uB9DE\uCDB0 YouTube \uB313\uAE00\uC5D0 \uC790\uB3D9\uC73C\uB85C \uC751\uB2F5\uD569\uB2C8\uB2E4. \uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9 \uD504\uB85C\uC81D\uD2B8\uC785\uB2C8\uB2E4.">
+  <meta property="twitter:image" content="${e}/og-image.png">
+
+  <!-- Naver \uAC80\uC0C9 \uCD5C\uC801\uD654 -->
+  <meta name="naver-site-verification" content="">
+
+  <!-- Schema.org \uAD6C\uC870\uD654 \uB370\uC774\uD130 -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Autonomey",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "AI \uAE30\uBC18 \uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 \uC2DC\uC2A4\uD15C. \uB313\uAE00 \uBD84\uB958, \uB9DE\uCDA4 \uC751\uB2F5 \uC0DD\uC131, \uC790\uB3D9 \uAC8C\uC2DC \uAE30\uB2A5 \uC81C\uACF5.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "KRW",
+      "description": "\uC720\uD29C\uBE0C \uCF58\uD150\uCE20\uC6A9 \uBB34\uB8CC \uD504\uB85C\uC81D\uD2B8"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "50"
+    },
+    "featureList": [
+      "AI \uB313\uAE00 \uC790\uB3D9 \uBD84\uB958",
+      "\uB9DE\uCDA4\uD615 \uC751\uB2F5 \uC0DD\uC131",
+      "\uB2E4\uCC44\uB110 \uAD00\uB9AC",
+      "\uC790\uB3D9 \uC2A4\uCF00\uC904\uB9C1",
+      "\uAC80\uD1A0 \uD6C4 \uAC8C\uC2DC"
+    ]
+  }
+  <\/script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Autonomey",
+    "url": "${e}",
+    "logo": "${e}/logo.png",
+    "description": "\uC720\uD29C\uBC84\uB97C \uC704\uD55C AI \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 \uC11C\uBE44\uC2A4",
+    "sameAs": [
+      "https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4"
+    ]
+  }
+  <\/script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "API Key\uB294 \uC5B4\uB5BB\uAC8C \uBC1C\uAE09\uBC1B\uB098\uC694?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OpenRouter (openrouter.ai)\uC5D0\uC11C \uBB34\uB8CC \uAC00\uC785 \uD6C4 API Key\uB97C \uBC1C\uAE09\uBC1B\uC73C\uC2DC\uBA74 \uB429\uB2C8\uB2E4. \uBB34\uB8CC \uBAA8\uB378\uC744 \uC120\uD0DD\uD558\uBA74 API \uBE44\uC6A9 \uC5C6\uC774 \uC2DC\uC791\uD560 \uC218 \uC788\uC5B4\uC694!"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "\uB0B4 \uCC44\uB110 \uC815\uBCF4\uAC00 \uC548\uC804\uD55C\uAC00\uC694?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "YouTube OAuth 2.0\uC73C\uB85C \uC548\uC804\uD558\uAC8C \uC5F0\uB3D9\uB429\uB2C8\uB2E4. \uBE44\uBC00\uBC88\uD638\uB97C \uC800\uC7A5\uD558\uC9C0 \uC54A\uC73C\uBA70, \uC5B8\uC81C\uB4E0 Google \uACC4\uC815 \uC124\uC815\uC5D0\uC11C \uC5F0\uB3D9\uC744 \uD574\uC81C\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "AI \uC751\uB2F5\uC774 \uB9C8\uC74C\uC5D0 \uC548 \uB4E4\uBA74\uC694?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "\uAC80\uD1A0 \uD6C4 \uAC8C\uC2DC \uAE30\uB2A5\uC73C\uB85C \uC751\uB2F5\uC744 \uD655\uC778/\uC218\uC815\uD55C \uB4A4 \uC2B9\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uB9C8\uC74C\uC5D0 \uC548 \uB4DC\uB294 \uC751\uB2F5\uC740 \uC0AD\uC81C\uD558\uAC70\uB098 \uC9C1\uC811 \uC218\uC815\uD558\uC138\uC694."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "\uC5EC\uB7EC \uCC44\uB110\uC744 \uC6B4\uC601\uD558\uB294\uB370\uC694?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "\uC5EC\uB7EC \uCC44\uB110\uC744 \uC5F0\uB3D9\uD558\uACE0 \uAC01 \uCC44\uB110\uBCC4\uB85C \uB2E4\uB978 \uC751\uB2F5 \uC2A4\uD0C0\uC77C\uC744 \uC124\uC815\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "\uBE44\uC6A9\uC774 \uBC1C\uC0DD\uD558\uB098\uC694?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "\uC11C\uBE44\uC2A4 \uC790\uCCB4\uB294 \uBB34\uB8CC\uC785\uB2C8\uB2E4. \uB2E4\uB9CC AI \uC751\uB2F5 \uC0DD\uC131\uC744 \uC704\uD574 OpenRouter API\uB97C \uC0AC\uC6A9\uD558\uBA70, API \uC0AC\uC6A9\uB7C9\uC5D0 \uB530\uB77C \uBE44\uC6A9\uC774 \uBC1C\uC0DD\uD569\uB2C8\uB2E4. \uB313\uAE00 1,000\uAC1C \uCC98\uB9AC \uC2DC \uC57D $0.5 \uC218\uC900\uC785\uB2C8\uB2E4."
+        }
+      }
+    ]
+  }
+  <\/script>
 
   <style>
     * {
@@ -9528,7 +5200,6 @@ function renderLanding() {
       </a>
       <div class="nav-links">
         <a href="#features">\uAE30\uB2A5</a>
-        <a href="#pricing">\uC694\uAE08</a>
         <a href="#faq">FAQ</a>
       </div>
       <div class="nav-cta">
@@ -9542,7 +5213,7 @@ function renderLanding() {
   <section class="hero">
     <div class="container">
       <div class="hero-content">
-        <div class="hero-badge">\u{1F680} Beta - \uBB34\uB8CC\uB85C \uC0AC\uC6A9\uD574\uBCF4\uC138\uC694</div>
+        <div class="hero-badge">\u{1F3AC} \uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9 \uD504\uB85C\uC81D\uD2B8</div>
         <h1>
           \uB313\uAE00 \uD558\uB098\uD558\uB098 \uB2F5\uD558\uB290\uB77C<br>
           <span>\uC601\uC0C1 \uB9CC\uB4E4 \uC2DC\uAC04\uC774 \uC5C6\uC73C\uC2E0\uAC00\uC694?</span>
@@ -9556,8 +5227,8 @@ function renderLanding() {
           <a href="#demo" class="btn btn-ghost btn-large">\uB370\uBAA8 \uBCF4\uAE30</a>
         </div>
         <div class="hero-features">
-          <span><span class="check">\u2713</span> Beta \uAE30\uAC04 \uBB34\uB8CC</span>
-          <span><span class="check">\u2713</span> \uC2E0\uC6A9\uCE74\uB4DC \uBD88\uD544\uC694</span>
+          <span><span class="check">\u2713</span> \uC11C\uBE44\uC2A4 \uBB34\uB8CC</span>
+          <span><span class="check">\u2713</span> API \uBE44\uC6A9\uB9CC \uBCC4\uB3C4</span>
           <span><span class="check">\u2713</span> 5\uBD84 \uC548\uC5D0 \uC124\uC815 \uC644\uB8CC</span>
         </div>
       </div>
@@ -9647,7 +5318,7 @@ function renderLanding() {
           <div class="step-content">
             <h3>\uD68C\uC6D0\uAC00\uC785 & API Key \uC124\uC815</h3>
             <p>OpenRouter API Key\uB9CC \uC788\uC73C\uBA74 OK</p>
-            <span class="hint">\u{1F4A1} \uBB34\uB8CC \uD06C\uB808\uB527\uC73C\uB85C \uC2DC\uC791 \uAC00\uB2A5</span>
+            <span class="hint">\u{1F4A1} \uBB34\uB8CC \uBAA8\uB378\uB85C \uC2DC\uC791 \uAC00\uB2A5</span>
           </div>
         </div>
         <div class="step">
@@ -9785,19 +5456,19 @@ function renderLanding() {
     </div>
   </section>
 
-  <!-- Pricing Section -->
-  <section class="pricing" id="pricing">
+  <!-- API \uBE44\uC6A9 \uC548\uB0B4 Section -->
+  <section class="pricing" id="api-cost">
     <div class="container">
       <div class="section-title">
-        <h2>\u{1F4B0} \uC2EC\uD50C\uD55C \uC694\uAE08\uC81C</h2>
-        <p>Beta \uAE30\uAC04 \uBB34\uB8CC, \uC815\uC2DD \uCD9C\uC2DC \uD6C4 \uC6D4 1,900\uC6D0</p>
+        <h2>\u{1F4A1} \uBE44\uC6A9 \uC548\uB0B4</h2>
+        <p>\uC11C\uBE44\uC2A4\uB294 \uBB34\uB8CC, API \uC5F0\uB3D9 \uBE44\uC6A9\uB9CC \uBCF8\uC778 \uBD80\uB2F4</p>
       </div>
-      <div class="pricing-cards">
+      <div class="pricing-cards" style="max-width: 500px;">
         <div class="pricing-card featured">
-          <div class="plan-icon">\u{1F389}</div>
-          <h3>Beta (\uD604\uC7AC)</h3>
-          <div class="price">\u20A90<span>/\uC6D4</span></div>
-          <div class="note">Beta \uAE30\uAC04 \uD55C\uC815 \uBB34\uB8CC</div>
+          <div class="plan-icon">\u{1F3AC}</div>
+          <h3>\uC720\uD29C\uBE0C \uCF58\uD150\uCE20\uC6A9</h3>
+          <div class="price">\uBB34\uB8CC</div>
+          <div class="note">\uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9 \uD504\uB85C\uC81D\uD2B8</div>
           <ul>
             <li><span class="check">\u2713</span> \uBB34\uC81C\uD55C \uCC44\uB110 \uC5F0\uB3D9</li>
             <li><span class="check">\u2713</span> \uBB34\uC81C\uD55C \uB313\uAE00 \uCC98\uB9AC</li>
@@ -9808,24 +5479,10 @@ function renderLanding() {
           </ul>
           <a href="/login" class="btn btn-primary">\uBB34\uB8CC\uB85C \uC2DC\uC791</a>
         </div>
-        <div class="pricing-card">
-          <div class="plan-icon">\u{1F680}</div>
-          <h3>\uC815\uC2DD \uBC84\uC804</h3>
-          <div class="price">\u20A91,900<span>/\uC6D4</span></div>
-          <div class="note">\uC815\uC2DD \uCD9C\uC2DC \uD6C4 \uC801\uC6A9 \uC608\uC815</div>
-          <ul>
-            <li><span class="check">\u2713</span> Beta \uC804\uCCB4 \uAE30\uB2A5</li>
-            <li><span class="check">\u2713</span> \uC790\uB3D9 \uC2A4\uCF00\uC904\uB9C1</li>
-            <li><span class="check">\u2713</span> \uBD84\uC11D \uB300\uC2DC\uBCF4\uB4DC</li>
-            <li><span class="check">\u2713</span> \uC6B0\uC120 \uAE30\uC220 \uC9C0\uC6D0</li>
-            <li><span class="check">\u2713</span> \uC2E0\uADDC \uAE30\uB2A5 \uC6B0\uC120 \uC81C\uACF5</li>
-            <li><span class="check">\u2713</span> Beta \uC720\uC800 \uD560\uC778 \uD61C\uD0DD</li>
-          </ul>
-          <button class="btn btn-ghost" disabled>\uCD9C\uC2DC \uC54C\uB9BC\uBC1B\uAE30</button>
-        </div>
       </div>
       <div class="pricing-hint">
-        <p>\u{1F4A1} AI \uBE44\uC6A9\uC740 \uBCF8\uC778\uC758 OpenRouter API Key\uB85C \uC9C1\uC811 \uAD00\uB9AC (\uB313\uAE00 1,000\uAC1C \uCC98\uB9AC \uC2DC \uC57D $0.5)</p>
+        <p>\u26A0\uFE0F AI \uC751\uB2F5 \uC0DD\uC131 \uC2DC OpenRouter API \uBE44\uC6A9\uC774 \uBC1C\uC0DD\uD569\uB2C8\uB2E4<br>
+        (\uB313\uAE00 1,000\uAC1C \uCC98\uB9AC \uC2DC \uC57D $0.5 \uC218\uC900)</p>
       </div>
     </div>
   </section>
@@ -9845,7 +5502,7 @@ function renderLanding() {
           <div class="faq-answer">
             <div class="faq-answer-content">
               OpenRouter (openrouter.ai)\uC5D0\uC11C \uBB34\uB8CC \uAC00\uC785 \uD6C4 API Key\uB97C \uBC1C\uAE09\uBC1B\uC73C\uC2DC\uBA74 \uB429\uB2C8\uB2E4.
-              \uAC00\uC785 \uC2DC \uBB34\uB8CC \uD06C\uB808\uB527\uB3C4 \uC81C\uACF5\uB418\uC5B4 \uBC14\uB85C \uC2DC\uC791\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4!
+              \uBB34\uB8CC \uBAA8\uB378\uC744 \uC120\uD0DD\uD558\uBA74 API \uBE44\uC6A9 \uC5C6\uC774 \uC2DC\uC791\uD560 \uC218 \uC788\uC5B4\uC694!
             </div>
           </div>
         </div>
@@ -9886,13 +5543,14 @@ function renderLanding() {
         </div>
         <div class="faq-item">
           <div class="faq-question">
-            \uB098\uC911\uC5D0 \uC720\uB8CC\uB85C \uBC14\uB00C\uB098\uC694?
+            \uBE44\uC6A9\uC774 \uBC1C\uC0DD\uD558\uB098\uC694?
             <span class="faq-toggle">\u25BC</span>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
-              \uB124, \uC815\uC2DD \uCD9C\uC2DC \uD6C4 \uC6D4 1,900\uC6D0\uC774 \uC801\uC6A9\uB420 \uC608\uC815\uC785\uB2C8\uB2E4.
-              Beta \uAE30\uAC04\uC5D0 \uAC00\uC785\uD558\uC2E0 \uBD84\uB4E4\uAED8\uB294 \uD560\uC778 \uD61C\uD0DD\uC744 \uB4DC\uB9B4 \uACC4\uD68D\uC774\uC5D0\uC694!
+              \uC11C\uBE44\uC2A4 \uC790\uCCB4\uB294 \uBB34\uB8CC\uC785\uB2C8\uB2E4! \uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9\uC73C\uB85C \uB9CC\uB4E0 \uD504\uB85C\uC81D\uD2B8\uC608\uC694.
+              \uB2E4\uB9CC AI \uC751\uB2F5 \uC0DD\uC131\uC744 \uC704\uD574 OpenRouter API\uB97C \uC0AC\uC6A9\uD558\uB294\uB370, API \uC0AC\uC6A9\uB7C9\uC5D0 \uB530\uB77C \uBE44\uC6A9\uC774 \uBC1C\uC0DD\uD569\uB2C8\uB2E4.
+              \uB313\uAE00 1,000\uAC1C \uCC98\uB9AC \uC2DC \uC57D $0.5 \uC218\uC900\uC774\uC5D0\uC694.
             </div>
           </div>
         </div>
@@ -9917,6 +5575,7 @@ function renderLanding() {
     <div class="container">
       <h2>\u{1F680} \uC9C0\uAE08 \uBC14\uB85C \uC2DC\uC791\uD558\uC138\uC694</h2>
       <p>\uB313\uAE00 \uAD00\uB9AC\uC5D0 \uC4F0\uB358 \uC2DC\uAC04,<br>\uC774\uC81C \uB354 \uC88B\uC740 \uC601\uC0C1 \uB9CC\uB4DC\uB294 \uB370 \uC4F0\uC138\uC694.</p>
+      <p style="font-size: 14px; color: #666; margin-bottom: 24px;">\uC720\uD29C\uBE0C \uCF58\uD150\uCE20 \uC81C\uC791\uC6A9 \uD504\uB85C\uC81D\uD2B8\uC785\uB2C8\uB2E4</p>
       <a href="/login" class="btn btn-primary btn-large">\uBB34\uB8CC\uB85C \uC2DC\uC791\uD558\uAE30</a>
     </div>
   </section>
@@ -9926,9 +5585,9 @@ function renderLanding() {
     <div class="footer-content">
       <div class="footer-logo">\u{1F3AC} Autonomey</div>
       <div class="footer-links">
-        <a href="#">\uC774\uC6A9\uC57D\uAD00</a>
-        <a href="#">\uAC1C\uC778\uC815\uBCF4\uCC98\uB9AC\uBC29\uCE68</a>
-        <a href="#">\uBB38\uC758\uD558\uAE30</a>
+        <a href="/terms">\uC774\uC6A9\uC57D\uAD00</a>
+        <a href="/privacy">\uAC1C\uC778\uC815\uBCF4\uCC98\uB9AC\uBC29\uCE68</a>
+        <a href="mailto:autonomey.ai@gmail.com">\uBB38\uC758\uD558\uAE30</a>
       </div>
       <div class="footer-copy">
         \xA9 2025 Autonomey. All rights reserved.<br>
@@ -9958,54 +5617,360 @@ function renderLanding() {
     });
   <\/script>
 </body>
-</html>`;
-}
-
-// src/index.ts
-var app2 = new Hono2();
-app2.use("*", logger());
-app2.use("*", cors({
-  origin: "*",
-  credentials: true
-}));
-app2.get("/", async (c) => {
-  const tokenCookie = c.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];
-  if (tokenCookie) {
-    const payload = await verifyToken(tokenCookie, c.env.JWT_SECRET);
-    if (payload) {
-      const user2 = await getUserById(c.env.KV, payload.userId);
-      if (user2) {
-        return c.redirect("/channels");
-      }
+</html>`}function Cn(){return`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>\uAC1C\uC778\uC815\uBCF4 \uCC98\uB9AC\uBC29\uCE68 | Autonomey</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      line-height: 1.8;
+      padding: 40px 20px;
     }
-  }
-  return c.html(renderLanding());
-});
-app2.get("/login", (c) => {
-  return c.html(renderLogin());
-});
-app2.get("/health", (c) => {
-  return c.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
-});
-app2.route("/auth", auth_default);
-app2.route("/api/schedule", schedule_default);
-app2.get("/oauth/callback", async (c) => {
-  const code = c.req.query("code");
-  const state = c.req.query("state");
-  const error = c.req.query("error");
-  if (error) {
-    return c.html(`
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .subtitle {
+      color: #888;
+      margin-bottom: 40px;
+    }
+    h2 {
+      font-size: 1.3rem;
+      margin-top: 40px;
+      margin-bottom: 15px;
+      color: #fff;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+    p, li {
+      color: #ccc;
+      margin-bottom: 12px;
+    }
+    ul {
+      margin-left: 20px;
+      margin-bottom: 20px;
+    }
+    .highlight {
+      background: #1a1a2e;
+      border-left: 3px solid #3b82f6;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .back-link {
+      display: inline-block;
+      margin-top: 40px;
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+    .update-date {
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>\u{1F512} \uAC1C\uC778\uC815\uBCF4 \uCC98\uB9AC\uBC29\uCE68</h1>
+    <p class="subtitle">Autonomey (\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 \uC11C\uBE44\uC2A4)</p>
+
+    <div class="highlight">
+      <strong>\u{1F4A1} \uC694\uC57D:</strong> Autonomey\uB294 \uC11C\uBE44\uC2A4 \uC81C\uACF5\uC5D0 \uD544\uC694\uD55C \uCD5C\uC18C\uD55C\uC758 \uC815\uBCF4\uB9CC \uC218\uC9D1\uD558\uBA70,
+      \uC0AC\uC6A9\uC790\uC758 YouTube \uB370\uC774\uD130\uB294 \uB313\uAE00 \uC751\uB2F5 \uAE30\uB2A5 \uC678\uC5D0\uB294 \uC0AC\uC6A9\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.
+      \uD604\uC7AC \uBCA0\uD0C0 \uAE30\uAC04\uC73C\uB85C <strong>\uC644\uC804 \uBB34\uB8CC</strong>\uB85C \uC6B4\uC601\uB429\uB2C8\uB2E4.
+    </div>
+
+    <h2>1. \uAC1C\uC778\uC815\uBCF4 \uC218\uC9D1 \uD56D\uBAA9</h2>
+    <p>Autonomey\uB294 \uB2E4\uC74C\uACFC \uAC19\uC740 \uC815\uBCF4\uB97C \uC218\uC9D1\uD569\uB2C8\uB2E4:</p>
+    <ul>
+      <li><strong>\uD68C\uC6D0 \uC815\uBCF4:</strong> \uC774\uBA54\uC77C \uC8FC\uC18C, \uC774\uB984 (\uD68C\uC6D0\uAC00\uC785 \uC2DC)</li>
+      <li><strong>YouTube \uC5F0\uB3D9 \uC815\uBCF4:</strong> YouTube \uCC44\uB110 ID, \uCC44\uB110\uBA85, OAuth \uD1A0\uD070</li>
+      <li><strong>\uC11C\uBE44\uC2A4 \uC774\uC6A9 \uC815\uBCF4:</strong> \uB313\uAE00 \uB370\uC774\uD130, AI \uC751\uB2F5 \uAE30\uB85D, \uC124\uC815 \uAC12</li>
+    </ul>
+
+    <h2>2. \uAC1C\uC778\uC815\uBCF4 \uC218\uC9D1 \uBAA9\uC801</h2>
+    <p>\uC218\uC9D1\uB41C \uC815\uBCF4\uB294 \uB2E4\uC74C \uBAA9\uC801\uC73C\uB85C\uB9CC \uC0AC\uC6A9\uB429\uB2C8\uB2E4:</p>
+    <ul>
+      <li>\uD68C\uC6D0 \uC2DD\uBCC4 \uBC0F \uC11C\uBE44\uC2A4 \uC81C\uACF5</li>
+      <li>YouTube \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 \uAE30\uB2A5 \uC218\uD589</li>
+      <li>\uC11C\uBE44\uC2A4 \uAC1C\uC120 \uBC0F \uD1B5\uACC4 \uBD84\uC11D</li>
+      <li>\uACE0\uAC1D \uBB38\uC758 \uC751\uB300</li>
+    </ul>
+
+    <h2>3. \uAC1C\uC778\uC815\uBCF4 \uBCF4\uC720 \uAE30\uAC04</h2>
+    <ul>
+      <li>\uD68C\uC6D0 \uD0C8\uD1F4 \uC2DC \uC989\uC2DC \uC0AD\uC81C</li>
+      <li>YouTube \uC5F0\uB3D9 \uD574\uC81C \uC2DC \uAD00\uB828 \uD1A0\uD070 \uC989\uC2DC \uC0AD\uC81C</li>
+      <li>\uC11C\uBE44\uC2A4 \uC774\uC6A9 \uAE30\uB85D: \uD68C\uC6D0 \uD0C8\uD1F4 \uD6C4 30\uC77C \uC774\uB0B4 \uC0AD\uC81C</li>
+    </ul>
+
+    <h2>4. \uAC1C\uC778\uC815\uBCF4 \uC81C3\uC790 \uC81C\uACF5</h2>
+    <p>Autonomey\uB294 \uC0AC\uC6A9\uC790\uC758 \uAC1C\uC778\uC815\uBCF4\uB97C \uC81C3\uC790\uC5D0\uAC8C \uC81C\uACF5\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uB2E8, \uB2E4\uC74C\uC758 \uACBD\uC6B0\uB294 \uC608\uC678\uB85C \uD569\uB2C8\uB2E4:</p>
+    <ul>
+      <li>\uC0AC\uC6A9\uC790\uAC00 \uC0AC\uC804\uC5D0 \uB3D9\uC758\uD55C \uACBD\uC6B0</li>
+      <li>\uBC95\uB839\uC5D0 \uC758\uD574 \uC694\uAD6C\uB418\uB294 \uACBD\uC6B0</li>
+    </ul>
+
+    <h2>5. \uC678\uBD80 \uC11C\uBE44\uC2A4 \uC5F0\uB3D9</h2>
+    <p>Autonomey\uB294 \uB2E4\uC74C \uC678\uBD80 \uC11C\uBE44\uC2A4\uC640 \uC5F0\uB3D9\uB429\uB2C8\uB2E4:</p>
+    <ul>
+      <li><strong>YouTube Data API:</strong> \uB313\uAE00 \uC870\uD68C \uBC0F \uAC8C\uC2DC\uB97C \uC704\uD574 \uC0AC\uC6A9</li>
+      <li><strong>OpenRouter API:</strong> AI \uC751\uB2F5 \uC0DD\uC131\uC744 \uC704\uD574 \uC0AC\uC6A9 (\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 API Key \uC785\uB825)</li>
+    </ul>
+    <p>\uAC01 \uC11C\uBE44\uC2A4\uC758 \uAC1C\uC778\uC815\uBCF4 \uCC98\uB9AC\uBC29\uCE68\uC740 \uD574\uB2F9 \uC11C\uBE44\uC2A4\uC5D0\uC11C \uD655\uC778\uD558\uC2DC\uAE30 \uBC14\uB78D\uB2C8\uB2E4.</p>
+
+    <h2>6. \uC0AC\uC6A9\uC790 \uAD8C\uB9AC</h2>
+    <p>\uC0AC\uC6A9\uC790\uB294 \uC5B8\uC81C\uB4E0\uC9C0 \uB2E4\uC74C \uAD8C\uB9AC\uB97C \uD589\uC0AC\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4:</p>
+    <ul>
+      <li>\uAC1C\uC778\uC815\uBCF4 \uC5F4\uB78C, \uC815\uC815, \uC0AD\uC81C \uC694\uCCAD</li>
+      <li>YouTube \uC5F0\uB3D9 \uD574\uC81C (Google \uACC4\uC815 \uC124\uC815\uC5D0\uC11C \uAC00\uB2A5)</li>
+      <li>\uD68C\uC6D0 \uD0C8\uD1F4</li>
+    </ul>
+
+    <h2>7. \uAC1C\uC778\uC815\uBCF4 \uBCF4\uD638</h2>
+    <ul>
+      <li>\uBE44\uBC00\uBC88\uD638\uB294 \uC548\uC804\uD55C \uD574\uC2DC \uC54C\uACE0\uB9AC\uC998\uC73C\uB85C \uC554\uD638\uD654 \uC800\uC7A5</li>
+      <li>OAuth \uD1A0\uD070\uC740 \uC554\uD638\uD654\uD558\uC5EC \uBCF4\uAD00</li>
+      <li>HTTPS\uB97C \uD1B5\uD55C \uC548\uC804\uD55C \uB370\uC774\uD130 \uC804\uC1A1</li>
+    </ul>
+
+    <h2>8. \uCFE0\uD0A4 \uC0AC\uC6A9</h2>
+    <p>Autonomey\uB294 \uB85C\uADF8\uC778 \uC138\uC158 \uC720\uC9C0\uB97C \uC704\uD574 \uCFE0\uD0A4\uB97C \uC0AC\uC6A9\uD569\uB2C8\uB2E4.
+    \uBE0C\uB77C\uC6B0\uC800 \uC124\uC815\uC5D0\uC11C \uCFE0\uD0A4\uB97C \uBE44\uD65C\uC131\uD654\uD560 \uC218 \uC788\uC73C\uB098, \uC774 \uACBD\uC6B0 \uC11C\uBE44\uC2A4 \uC774\uC6A9\uC774 \uC81C\uD55C\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>
+
+    <h2>9. \uBB38\uC758\uCC98</h2>
+    <p>\uAC1C\uC778\uC815\uBCF4 \uAD00\uB828 \uBB38\uC758\uB294 \uC544\uB798\uB85C \uC5F0\uB77D\uD574\uC8FC\uC138\uC694:</p>
+    <ul>
+      <li><strong>\uC11C\uBE44\uC2A4 \uC81C\uACF5\uC790:</strong> AI \uC7A1\uB3CC\uC774</li>
+      <li><strong>\uC774\uBA54\uC77C:</strong> oojooteam@gmail.com</li>
+      <li><strong>YouTube:</strong> <a href="https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4" style="color: #3b82f6;">@AI\uC7A1\uB3CC\uC774</a></li>
+    </ul>
+
+    <h2>10. \uAC1C\uC815 \uC548\uB0B4</h2>
+    <p>\uBCF8 \uAC1C\uC778\uC815\uBCF4 \uCC98\uB9AC\uBC29\uCE68\uC740 \uBC95\uB839 \uBCC0\uACBD\uC774\uB098 \uC11C\uBE44\uC2A4 \uBCC0\uACBD\uC5D0 \uB530\uB77C \uC218\uC815\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4.
+    \uBCC0\uACBD \uC2DC \uC11C\uBE44\uC2A4 \uB0B4 \uACF5\uC9C0\uB97C \uD1B5\uD574 \uC548\uB0B4\uB4DC\uB9BD\uB2C8\uB2E4.</p>
+
+    <p class="update-date">\uCD5C\uC885 \uC218\uC815\uC77C: 2024\uB144 12\uC6D4 1\uC77C</p>
+
+    <a href="/" class="back-link">\u2190 \uD648\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</a>
+  </div>
+</body>
+</html>`}function En(){return`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>\uC11C\uBE44\uC2A4 \uC774\uC6A9\uC57D\uAD00 | Autonomey</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      line-height: 1.8;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .subtitle {
+      color: #888;
+      margin-bottom: 40px;
+    }
+    h2 {
+      font-size: 1.3rem;
+      margin-top: 40px;
+      margin-bottom: 15px;
+      color: #fff;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+    p, li {
+      color: #ccc;
+      margin-bottom: 12px;
+    }
+    ul {
+      margin-left: 20px;
+      margin-bottom: 20px;
+    }
+    .highlight {
+      background: #1a2e1a;
+      border-left: 3px solid #22c55e;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .warning {
+      background: #2e2a1a;
+      border-left: 3px solid #eab308;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .back-link {
+      display: inline-block;
+      margin-top: 40px;
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+    .update-date {
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>\u{1F4CB} \uC11C\uBE44\uC2A4 \uC774\uC6A9\uC57D\uAD00</h1>
+    <p class="subtitle">Autonomey (\uC720\uD29C\uBE0C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 \uC11C\uBE44\uC2A4)</p>
+
+    <div class="highlight">
+      <strong>\u{1F389} \uBCA0\uD0C0 \uC11C\uBE44\uC2A4 \uC548\uB0B4:</strong> Autonomey\uB294 \uD604\uC7AC \uBCA0\uD0C0 \uD14C\uC2A4\uD2B8 \uAE30\uAC04\uC73C\uB85C,
+      \uBAA8\uB4E0 \uAE30\uB2A5\uC744 <strong>\uBB34\uB8CC</strong>\uB85C \uC774\uC6A9\uD558\uC2E4 \uC218 \uC788\uC2B5\uB2C8\uB2E4.
+      \uC815\uC2DD \uC11C\uBE44\uC2A4 \uCD9C\uC2DC \uC2DC \uC694\uAE08 \uC815\uCC45\uC774 \uBCC0\uACBD\uB420 \uC218 \uC788\uC73C\uBA70, \uC0AC\uC804\uC5D0 \uC548\uB0B4\uB4DC\uB9BD\uB2C8\uB2E4.
+    </div>
+
+    <h2>\uC81C1\uC870 (\uBAA9\uC801)</h2>
+    <p>\uBCF8 \uC57D\uAD00\uC740 AI \uC7A1\uB3CC\uC774(\uC774\uD558 "\uC6B4\uC601\uC790")\uAC00 \uC81C\uACF5\uD558\uB294 Autonomey \uC11C\uBE44\uC2A4(\uC774\uD558 "\uC11C\uBE44\uC2A4")\uC758
+    \uC774\uC6A9 \uC870\uAC74 \uBC0F \uC808\uCC28, \uC6B4\uC601\uC790\uC640 \uD68C\uC6D0 \uAC04\uC758 \uAD8C\uB9AC\xB7\uC758\uBB34 \uBC0F \uCC45\uC784\uC0AC\uD56D\uC744 \uADDC\uC815\uD568\uC744 \uBAA9\uC801\uC73C\uB85C \uD569\uB2C8\uB2E4.</p>
+
+    <h2>\uC81C2\uC870 (\uC11C\uBE44\uC2A4 \uB0B4\uC6A9)</h2>
+    <p>Autonomey\uB294 \uB2E4\uC74C\uC758 \uC11C\uBE44\uC2A4\uB97C \uC81C\uACF5\uD569\uB2C8\uB2E4:</p>
+    <ul>
+      <li>YouTube \uCC44\uB110 \uB313\uAE00 \uC790\uB3D9 \uC218\uC9D1</li>
+      <li>AI \uAE30\uBC18 \uB313\uAE00 \uC790\uB3D9 \uBD84\uB958 (\uAE0D\uC815/\uC9C8\uBB38/\uBD80\uC815/\uC2A4\uD338)</li>
+      <li>AI \uB9DE\uCDA4 \uC751\uB2F5 \uC0DD\uC131</li>
+      <li>\uB313\uAE00 \uC790\uB3D9/\uC218\uB3D9 \uAC8C\uC2DC</li>
+      <li>\uB2E4\uC911 \uCC44\uB110 \uAD00\uB9AC</li>
+    </ul>
+
+    <h2>\uC81C3\uC870 (\uD68C\uC6D0\uAC00\uC785)</h2>
+    <ul>
+      <li>\uC11C\uBE44\uC2A4 \uC774\uC6A9\uC744 \uC704\uD574\uC11C\uB294 \uD68C\uC6D0\uAC00\uC785\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.</li>
+      <li>\uD68C\uC6D0\uAC00\uC785 \uC2DC \uC815\uD655\uD55C \uC815\uBCF4\uB97C \uC785\uB825\uD574\uC57C \uD569\uB2C8\uB2E4.</li>
+      <li>\uD0C0\uC778\uC758 \uC815\uBCF4\uB97C \uB3C4\uC6A9\uD558\uAC70\uB098 \uD5C8\uC704 \uC815\uBCF4\uB97C \uC785\uB825\uD560 \uACBD\uC6B0 \uC11C\uBE44\uC2A4 \uC774\uC6A9\uC774 \uC81C\uD55C\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C4\uC870 (YouTube \uC5F0\uB3D9)</h2>
+    <ul>
+      <li>\uC11C\uBE44\uC2A4 \uC774\uC6A9\uC744 \uC704\uD574 YouTube \uACC4\uC815 \uC5F0\uB3D9(OAuth)\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.</li>
+      <li>\uC5F0\uB3D9 \uC2DC YouTube Data API\uB97C \uD1B5\uD574 \uB313\uAE00 \uC870\uD68C \uBC0F \uAC8C\uC2DC \uAD8C\uD55C\uC744 \uC694\uCCAD\uD569\uB2C8\uB2E4.</li>
+      <li>\uC0AC\uC6A9\uC790\uB294 \uC5B8\uC81C\uB4E0\uC9C0 Google \uACC4\uC815 \uC124\uC815\uC5D0\uC11C \uC5F0\uB3D9\uC744 \uD574\uC81C\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</li>
+      <li>YouTube \uC11C\uBE44\uC2A4 \uC57D\uAD00\uC744 \uC900\uC218\uD574\uC57C \uD569\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C5\uC870 (API Key \uC0AC\uC6A9)</h2>
+    <ul>
+      <li>AI \uC751\uB2F5 \uC0DD\uC131\uC744 \uC704\uD574 \uC0AC\uC6A9\uC790 \uBCF8\uC778\uC758 OpenRouter API Key\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.</li>
+      <li>API Key\uB294 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uBC1C\uAE09\uBC1B\uC544 \uC785\uB825\uD569\uB2C8\uB2E4.</li>
+      <li>API \uC0AC\uC6A9\uC5D0 \uB530\uB978 \uBE44\uC6A9\uC740 \uC0AC\uC6A9\uC790 \uBD80\uB2F4\uC785\uB2C8\uB2E4.</li>
+      <li>API Key\uB294 \uC554\uD638\uD654\uD558\uC5EC \uC800\uC7A5\uB418\uBA70, \uC11C\uBE44\uC2A4 \uC81C\uACF5 \uBAA9\uC801 \uC678\uC5D0\uB294 \uC0AC\uC6A9\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C6\uC870 (\uC774\uC6A9\uC790\uC758 \uC758\uBB34)</h2>
+    <p>\uC774\uC6A9\uC790\uB294 \uB2E4\uC74C \uD589\uC704\uB97C \uD574\uC11C\uB294 \uC548 \uB429\uB2C8\uB2E4:</p>
+    <ul>
+      <li>\uC2A4\uD338\uC131 \uB313\uAE00 \uB300\uB7C9 \uAC8C\uC2DC</li>
+      <li>\uD0C0\uC778\uC744 \uBE44\uBC29\uD558\uAC70\uB098 \uBA85\uC608\uB97C \uD6FC\uC190\uD558\uB294 \uB313\uAE00 \uAC8C\uC2DC</li>
+      <li>\uBD88\uBC95\uC801\uC778 \uB0B4\uC6A9\uC758 \uB313\uAE00 \uAC8C\uC2DC</li>
+      <li>YouTube \uCEE4\uBBA4\uB2C8\uD2F0 \uAC00\uC774\uB4DC\uB77C\uC778 \uC704\uBC18</li>
+      <li>\uC11C\uBE44\uC2A4 \uC2DC\uC2A4\uD15C\uC5D0 \uB300\uD55C \uBD88\uBC95\uC801\uC778 \uC811\uADFC \uB610\uB294 \uACF5\uACA9</li>
+      <li>\uD0C0\uC778\uC758 \uACC4\uC815 \uB3C4\uC6A9</li>
+    </ul>
+
+    <div class="warning">
+      <strong>\u26A0\uFE0F \uC8FC\uC758:</strong> AI\uAC00 \uC0DD\uC131\uD55C \uC751\uB2F5\uC774\uB77C \uD558\uB354\uB77C\uB3C4, \uCD5C\uC885 \uAC8C\uC2DC\uC5D0 \uB300\uD55C \uCC45\uC784\uC740
+      \uD574\uB2F9 YouTube \uCC44\uB110 \uC18C\uC720\uC790(\uC0AC\uC6A9\uC790)\uC5D0\uAC8C \uC788\uC2B5\uB2C8\uB2E4. \uAC8C\uC2DC \uC804 \uB0B4\uC6A9\uC744 \uD655\uC778\uD558\uC2DC\uAE30 \uBC14\uB78D\uB2C8\uB2E4.
+    </div>
+
+    <h2>\uC81C7\uC870 (\uC11C\uBE44\uC2A4 \uC81C\uD55C \uBC0F \uC911\uB2E8)</h2>
+    <ul>
+      <li>\uC6B4\uC601\uC790\uB294 \uB2E4\uC74C \uACBD\uC6B0 \uC11C\uBE44\uC2A4 \uC774\uC6A9\uC744 \uC81C\uD55C\uD558\uAC70\uB098 \uC911\uB2E8\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4:
+        <ul>
+          <li>\uBCF8 \uC57D\uAD00\uC744 \uC704\uBC18\uD55C \uACBD\uC6B0</li>
+          <li>\uC2DC\uC2A4\uD15C \uC810\uAC80\uC774 \uD544\uC694\uD55C \uACBD\uC6B0</li>
+          <li>\uCC9C\uC7AC\uC9C0\uBCC0, \uAD6D\uAC00\uBE44\uC0C1\uC0AC\uD0DC \uB4F1 \uBD88\uAC00\uD56D\uB825\uC801\uC778 \uACBD\uC6B0</li>
+        </ul>
+      </li>
+      <li>\uBCA0\uD0C0 \uC11C\uBE44\uC2A4 \uD2B9\uC131\uC0C1 \uC608\uACE0 \uC5C6\uC774 \uAE30\uB2A5\uC774 \uBCC0\uACBD\uB418\uAC70\uB098 \uC11C\uBE44\uC2A4\uAC00 \uC911\uB2E8\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C8\uC870 (\uBA74\uCC45\uC870\uD56D)</h2>
+    <ul>
+      <li>\uC6B4\uC601\uC790\uB294 \uCC9C\uC7AC\uC9C0\uBCC0, \uC804\uC7C1 \uB4F1 \uBD88\uAC00\uD56D\uB825\uC801 \uC0AC\uC720\uB85C \uC778\uD55C \uC11C\uBE44\uC2A4 \uC911\uB2E8\uC5D0 \uB300\uD574 \uCC45\uC784\uC9C0\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.</li>
+      <li>AI\uAC00 \uC0DD\uC131\uD55C \uC751\uB2F5\uC758 \uB0B4\uC6A9\uC5D0 \uB300\uD55C \uCD5C\uC885 \uCC45\uC784\uC740 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC788\uC2B5\uB2C8\uB2E4.</li>
+      <li>YouTube API \uC815\uCC45 \uBCC0\uACBD\uC73C\uB85C \uC778\uD55C \uC11C\uBE44\uC2A4 \uC81C\uD55C\uC5D0 \uB300\uD574 \uCC45\uC784\uC9C0\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.</li>
+      <li>\uC0AC\uC6A9\uC790\uC758 API Key \uAD00\uB9AC \uC18C\uD640\uB85C \uC778\uD55C \uBB38\uC81C\uB294 \uC0AC\uC6A9\uC790 \uCC45\uC784\uC785\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C9\uC870 (\uC800\uC791\uAD8C)</h2>
+    <ul>
+      <li>\uC11C\uBE44\uC2A4 \uB0B4 \uCF58\uD150\uCE20 \uBC0F \uB514\uC790\uC778\uC5D0 \uB300\uD55C \uC800\uC791\uAD8C\uC740 \uC6B4\uC601\uC790\uC5D0\uAC8C \uC788\uC2B5\uB2C8\uB2E4.</li>
+      <li>\uC0AC\uC6A9\uC790\uAC00 \uC791\uC131\uD55C \uB313\uAE00\uC758 \uC800\uC791\uAD8C\uC740 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC788\uC2B5\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C10\uC870 (\uC57D\uAD00 \uBCC0\uACBD)</h2>
+    <ul>
+      <li>\uBCF8 \uC57D\uAD00\uC740 \uAD00\uB828 \uBC95\uB839 \uBCC0\uACBD\uC774\uB098 \uC11C\uBE44\uC2A4 \uC815\uCC45 \uBCC0\uACBD\uC5D0 \uB530\uB77C \uC218\uC815\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</li>
+      <li>\uC57D\uAD00 \uBCC0\uACBD \uC2DC \uC11C\uBE44\uC2A4 \uB0B4 \uACF5\uC9C0\uB97C \uD1B5\uD574 7\uC77C \uC804 \uC548\uB0B4\uD569\uB2C8\uB2E4.</li>
+      <li>\uBCC0\uACBD\uB41C \uC57D\uAD00\uC5D0 \uB3D9\uC758\uD558\uC9C0 \uC54A\uB294 \uACBD\uC6B0 \uD68C\uC6D0 \uD0C8\uD1F4\uAC00 \uAC00\uB2A5\uD569\uB2C8\uB2E4.</li>
+    </ul>
+
+    <h2>\uC81C11\uC870 (\uBD84\uC7C1 \uD574\uACB0)</h2>
+    <p>\uBCF8 \uC57D\uAD00\uACFC \uAD00\uB828\uD558\uC5EC \uBD84\uC7C1\uC774 \uBC1C\uC0DD\uD55C \uACBD\uC6B0, \uB300\uD55C\uBBFC\uAD6D \uBC95\uB960\uC744 \uC900\uAC70\uBC95\uC73C\uB85C \uD558\uBA70,
+    \uAD00\uD560 \uBC95\uC6D0\uC740 \uC6B4\uC601\uC790\uC758 \uC18C\uC7AC\uC9C0\uB97C \uAD00\uD560\uD558\uB294 \uBC95\uC6D0\uC73C\uB85C \uD569\uB2C8\uB2E4.</p>
+
+    <h2>\uC81C12\uC870 (\uBB38\uC758)</h2>
+    <p>\uC11C\uBE44\uC2A4 \uC774\uC6A9 \uAD00\uB828 \uBB38\uC758\uB294 \uC544\uB798\uB85C \uC5F0\uB77D\uD574\uC8FC\uC138\uC694:</p>
+    <ul>
+      <li><strong>\uC11C\uBE44\uC2A4 \uC6B4\uC601\uC790:</strong> AI \uC7A1\uB3CC\uC774</li>
+      <li><strong>\uC774\uBA54\uC77C:</strong> oojooteam@gmail.com</li>
+      <li><strong>YouTube:</strong> <a href="https://www.youtube.com/@AI%EC%9E%A1%EB%8F%8C%EC%9D%B4" style="color: #3b82f6;">@AI\uC7A1\uB3CC\uC774</a></li>
+    </ul>
+
+    <p class="update-date">\uC2DC\uD589\uC77C: 2024\uB144 12\uC6D4 1\uC77C</p>
+
+    <a href="/" class="back-link">\u2190 \uD648\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</a>
+  </div>
+</body>
+</html>`}var b=new k;b.use("*",St());b.use("*",It({origin:"*",credentials:!0}));b.get("/",async e=>{let t=e.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];if(t){let o=await T(t,e.env.JWT_SECRET);if(o&&await w(e.env.KV,o.userId))return e.redirect("/channels")}let n=e.env.BASE_URL||"https://autonomey.com";return e.html(In(n))});b.get("/login",e=>e.html(wn()));b.get("/health",e=>e.json({status:"ok",timestamp:new Date().toISOString()}));b.get("/privacy",e=>e.html(Cn()));b.get("/terms",e=>e.html(En()));b.route("/auth",dn);b.route("/api/schedule",yn);b.get("/oauth/callback",async e=>{let t=e.req.query("code"),n=e.req.query("state"),o=e.req.query("error");if(o)return e.html(`
       <html>
         <body style="font-family: sans-serif; padding: 40px; text-align: center; background: #0f0f0f; color: #fff;">
           <h1>\u274C OAuth \uC624\uB958</h1>
-          <p style="color: #f87171;">${error}</p>
+          <p style="color: #f87171;">${o}</p>
           <a href="/channels" style="color: #3b82f6;">\uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</a>
         </body>
       </html>
-    `);
-  }
-  if (!code) {
-    return c.html(`
+    `);if(!t)return e.html(`
       <html>
         <body style="font-family: sans-serif; padding: 40px; text-align: center; background: #0f0f0f; color: #fff;">
           <h1>\u274C \uC624\uB958</h1>
@@ -10013,10 +5978,7 @@ app2.get("/oauth/callback", async (c) => {
           <a href="/channels" style="color: #3b82f6;">\uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</a>
         </body>
       </html>
-    `);
-  }
-  if (!state) {
-    return c.html(`
+    `);if(!n)return e.html(`
       <html>
         <body style="font-family: sans-serif; padding: 40px; text-align: center; background: #0f0f0f; color: #fff;">
           <h1>\u274C \uC624\uB958</h1>
@@ -10024,11 +5986,7 @@ app2.get("/oauth/callback", async (c) => {
           <a href="/channels" style="color: #3b82f6;">\uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</a>
         </body>
       </html>
-    `);
-  }
-  const stateData = parseOAuthState(state);
-  if (!stateData || !stateData.userId) {
-    return c.html(`
+    `);let s=Xt(n);if(!s||!s.userId)return e.html(`
       <html>
         <body style="font-family: sans-serif; padding: 40px; text-align: center; background: #0f0f0f; color: #fff;">
           <h1>\u274C \uC624\uB958</h1>
@@ -10036,13 +5994,7 @@ app2.get("/oauth/callback", async (c) => {
           <a href="/channels" style="color: #3b82f6;">\uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C \uB3CC\uC544\uAC00\uAE30</a>
         </body>
       </html>
-    `);
-  }
-  try {
-    const baseUrl = new URL(c.req.url).origin;
-    const redirectUri = `${baseUrl}/oauth/callback`;
-    const channel = await exchangeCodeForTokens(c.env, code, redirectUri, stateData.userId);
-    return c.html(`
+    `);try{let a=`${new URL(e.req.url).origin}/oauth/callback`,c=await Gt(e.env,t,a,s.userId);return e.html(`
       <!DOCTYPE html>
       <html lang="ko">
         <head>
@@ -10143,7 +6095,7 @@ app2.get("/oauth/callback", async (c) => {
           <div class="success-card">
             <div class="success-icon">\u{1F389}</div>
             <h1>\uCC44\uB110 \uC5F0\uB3D9 \uC644\uB8CC!</h1>
-            <p class="channel-name">"${channel.youtube.channelTitle}"</p>
+            <p class="channel-name">"${c.youtube.channelTitle}"</p>
             <p class="description">YouTube \uCC44\uB110\uC774 \uC131\uACF5\uC801\uC73C\uB85C \uC5F0\uACB0\uB418\uC5C8\uC2B5\uB2C8\uB2E4.<br>\uC774\uC81C \uB313\uAE00 \uC790\uB3D9 \uC751\uB2F5 \uAE30\uB2A5\uC744 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>
 
             <div class="next-steps">
@@ -10155,153 +6107,20 @@ app2.get("/oauth/callback", async (c) => {
               </ul>
             </div>
 
-            <a href="/channels/${channel.id}" class="btn-primary">\uB300\uC2DC\uBCF4\uB4DC\uB85C \uC774\uB3D9 \u2192</a>
+            <a href="/channels/${c.id}" class="btn-primary">\uB300\uC2DC\uBCF4\uB4DC\uB85C \uC774\uB3D9 \u2192</a>
             <br>
             <a href="/channels" class="btn-secondary">\uCC44\uB110 \uBAA9\uB85D \uBCF4\uAE30</a>
           </div>
         </body>
       </html>
-    `);
-  } catch (err) {
-    return c.html(`
+    `)}catch(r){return e.html(`
       <html>
         <body style="font-family: sans-serif; padding: 40px; text-align: center; background: #0f0f0f; color: #fff;">
           <h1>\u274C \uCC44\uB110 \uC5F0\uACB0 \uC2E4\uD328</h1>
-          <p style="color: #f87171;">${err instanceof Error ? err.message : "\uC54C \uC218 \uC5C6\uB294 \uC624\uB958"}</p>
+          <p style="color: #f87171;">${r instanceof Error?r.message:"\uC54C \uC218 \uC5C6\uB294 \uC624\uB958"}</p>
           <a href="/oauth/start" style="color: #3b82f6;">\uB2E4\uC2DC \uC2DC\uB3C4</a>
           <span style="margin: 0 10px; color: #666;">|</span>
           <a href="/channels" style="color: #888;">\uCC44\uB110 \uBAA9\uB85D\uC73C\uB85C</a>
         </body>
       </html>
-    `);
-  }
-});
-app2.get("/oauth/start", async (c) => {
-  const tokenCookie = c.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];
-  if (!tokenCookie) {
-    return c.redirect("/login?logout");
-  }
-  const payload = await verifyToken(tokenCookie, c.env.JWT_SECRET);
-  if (!payload) {
-    return c.redirect("/login?logout");
-  }
-  const user2 = await getUserById(c.env.KV, payload.userId);
-  if (!user2) {
-    return c.redirect("/login?logout");
-  }
-  const baseUrl = new URL(c.req.url).origin;
-  const redirectUri = `${baseUrl}/oauth/callback`;
-  const authUrl = getOAuthUrl(c.env, redirectUri, user2.id);
-  return c.redirect(authUrl);
-});
-app2.get("/channels", async (c) => {
-  const tokenCookie = c.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];
-  if (!tokenCookie) {
-    return c.redirect("/login?logout");
-  }
-  const payload = await verifyToken(tokenCookie, c.env.JWT_SECRET);
-  if (!payload) {
-    return c.redirect("/login?logout");
-  }
-  const user2 = await getUserById(c.env.KV, payload.userId);
-  if (!user2) {
-    return c.redirect("/login?logout");
-  }
-  const channels2 = await getUserChannelsData(c.env.KV, user2.id);
-  return c.html(renderChannelList(user2, channels2));
-});
-app2.get("/channels/:channelId", async (c) => {
-  const tokenCookie = c.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];
-  if (!tokenCookie) {
-    return c.redirect("/login?logout");
-  }
-  const payload = await verifyToken(tokenCookie, c.env.JWT_SECRET);
-  if (!payload) {
-    return c.redirect("/login?logout");
-  }
-  const user2 = await getUserById(c.env.KV, payload.userId);
-  if (!user2) {
-    return c.redirect("/login?logout");
-  }
-  const channelId = c.req.param("channelId");
-  const userChannels = await getUserChannelsData(c.env.KV, user2.id);
-  const currentChannel = userChannels.find((ch) => ch.id === channelId);
-  if (!currentChannel) {
-    return c.redirect("/channels");
-  }
-  return c.html(await renderDashboard(c.env, { currentChannel, userChannels, user: user2 }));
-});
-app2.get("/settings", async (c) => {
-  const tokenCookie = c.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];
-  if (!tokenCookie) {
-    return c.redirect("/login?logout");
-  }
-  const payload = await verifyToken(tokenCookie, c.env.JWT_SECRET);
-  if (!payload) {
-    return c.redirect("/login?logout");
-  }
-  const user2 = await getUserById(c.env.KV, payload.userId);
-  if (!user2) {
-    return c.redirect("/login?logout");
-  }
-  const userChannels = await getUserChannelsData(c.env.KV, user2.id);
-  return c.html(renderSettings({ user: user2, userChannels }));
-});
-app2.use("/api/*", async (c, next) => {
-  if (c.req.path.startsWith("/api/schedule")) {
-    return next();
-  }
-  const authHeader = c.req.header("Authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.substring(7);
-    const payload = await verifyToken(token, c.env.JWT_SECRET);
-    if (payload) {
-      const user2 = await getUserById(c.env.KV, payload.userId);
-      if (user2) {
-        c.set("jwtPayload", payload);
-        c.set("user", user2);
-        return next();
-      }
-    }
-    return c.json({ success: false, error: "\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD1A0\uD070\uC785\uB2C8\uB2E4." }, 401);
-  }
-  const tokenCookie = c.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];
-  if (tokenCookie) {
-    const payload = await verifyToken(tokenCookie, c.env.JWT_SECRET);
-    if (payload) {
-      const user2 = await getUserById(c.env.KV, payload.userId);
-      if (user2) {
-        c.set("jwtPayload", payload);
-        c.set("user", user2);
-        return next();
-      }
-    }
-  }
-  return c.json({ success: false, error: "\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4." }, 401);
-});
-app2.route("/api", api_default);
-app2.route("/api/user", user_default);
-app2.route("/api/channels", channels_default);
-app2.notFound((c) => {
-  return c.json({
-    success: false,
-    error: "Not found",
-    path: c.req.path
-  }, 404);
-});
-app2.onError((err, c) => {
-  if (err instanceof HTTPException) {
-    return err.getResponse();
-  }
-  console.error("Error:", err);
-  return c.json({
-    success: false,
-    error: err.message || "Internal server error"
-  }, 500);
-});
-var src_default = {
-  fetch: app2.fetch
-};
-export {
-  src_default as default
-};
+    `)}});b.get("/oauth/start",async e=>{let t=e.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];if(!t)return e.redirect("/login?logout");let n=await T(t,e.env.JWT_SECRET);if(!n)return e.redirect("/login?logout");let o=await w(e.env.KV,n.userId);if(!o)return e.redirect("/login?logout");let r=`${new URL(e.req.url).origin}/oauth/callback`,a=Qt(e.env,r,o.id);return e.redirect(a)});b.get("/channels",async e=>{let t=e.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];if(!t)return e.redirect("/login?logout");let n=await T(t,e.env.JWT_SECRET);if(!n)return e.redirect("/login?logout");let o=await w(e.env.KV,n.userId);if(!o)return e.redirect("/login?logout");let s=await F(e.env.KV,o.id);return e.html(kn(o,s))});b.get("/channels/:channelId",async e=>{let t=e.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];if(!t)return e.redirect("/login?logout");let n=await T(t,e.env.JWT_SECRET);if(!n)return e.redirect("/login?logout");let o=await w(e.env.KV,n.userId);if(!o)return e.redirect("/login?logout");let s=e.req.param("channelId"),r=await F(e.env.KV,o.id),a=r.find(c=>c.id===s);return a?e.html(await vn(e.env,{currentChannel:a,userChannels:r,user:o})):e.redirect("/channels")});b.get("/settings",async e=>{let t=e.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];if(!t)return e.redirect("/login?logout");let n=await T(t,e.env.JWT_SECRET);if(!n)return e.redirect("/login?logout");let o=await w(e.env.KV,n.userId);if(!o)return e.redirect("/login?logout");let s=await F(e.env.KV,o.id);return e.html(Tn({user:o,userChannels:s}))});b.use("/api/*",async(e,t)=>{if(e.req.path.startsWith("/api/schedule"))return t();let n=e.req.header("Authorization");if(n&&n.startsWith("Bearer ")){let s=n.substring(7),r=await T(s,e.env.JWT_SECRET);if(r){let a=await w(e.env.KV,r.userId);if(a)return e.set("jwtPayload",r),e.set("user",a),t()}return e.json({success:!1,error:"\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD1A0\uD070\uC785\uB2C8\uB2E4."},401)}let o=e.req.raw.headers.get("cookie")?.match(/token=([^;]+)/)?.[1];if(o){let s=await T(o,e.env.JWT_SECRET);if(s){let r=await w(e.env.KV,s.userId);if(r)return e.set("jwtPayload",s),e.set("user",r),t()}}return e.json({success:!1,error:"\uC778\uC99D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."},401)});b.route("/api",an);b.route("/api/user",pn);b.route("/api/channels",mn);b.notFound(e=>e.json({success:!1,error:"Not found",path:e.req.path},404));b.onError((e,t)=>e instanceof Se?e.getResponse():(console.error("Error:",e),t.json({success:!1,error:e.message||"Internal server error"},500)));var da={fetch:b.fetch};export{da as default};

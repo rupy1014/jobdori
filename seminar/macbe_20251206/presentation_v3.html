@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바이브 기획 - AI 시대의 기획자 (v3)</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* ===== CSS Variables (Rovel 스타일 기반) ===== */
+    :root {
+      --primary: #E11D48;
+      --primary-light: #FB7185;
+      --primary-dark: #BE123C;
+      --primary-gradient: linear-gradient(135deg, #E11D48 0%, #F43F5E 50%, #FB7185 100%);
+
+      --secondary: #7C3AED;
+      --secondary-light: #A78BFA;
+
+      --bg-white: #FFFFFF;
+      --bg-cream: #FFF7ED;
+      --bg-rose: #FFF1F2;
+      --bg-gray: #F9FAFB;
+      --bg-dark: #1F2937;
+
+      --text-primary: #1F2937;
+      --text-secondary: #4B5563;
+      --text-muted: #9CA3AF;
+      --text-white: #FFFFFF;
+
+      --accent-gold: #F59E0B;
+      --accent-purple: #7C3AED;
+      --accent-blue: #3B82F6;
+      --accent-green: #10B981;
+      --accent-red: #EF4444;
+
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+      --shadow-md: 0 10px 30px rgba(225,29,72,0.1);
+      --shadow-lg: 0 25px 50px rgba(225,29,72,0.15);
+
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-white);
+      color: var(--text-primary);
+      line-height: 1.8;
+      scroll-behavior: smooth;
+    }
+
+    /* ===== 슬라이드 기본 ===== */
+    .slide {
+      min-height: 100vh;
+      padding: 80px 10%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      position: relative;
+      background: var(--bg-white);
+    }
+
+    .slide-title {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: linear-gradient(180deg, var(--bg-rose) 0%, var(--bg-white) 100%);
+    }
+
+    .slide-alt {
+      background: var(--bg-gray);
+    }
+
+    .slide-dark {
+      background: var(--bg-dark);
+      color: var(--text-white);
+    }
+
+    .slide-rose {
+      background: var(--bg-rose);
+    }
+
+    /* ===== 타이포그래피 ===== */
+    h1 {
+      font-size: 7rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+      background: var(--primary-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h2 {
+      font-size: 5rem;
+      font-weight: 800;
+      margin-bottom: 2rem;
+      color: var(--text-primary);
+    }
+
+    .slide-dark h2 {
+      color: var(--text-white);
+    }
+
+    h3 {
+      font-size: 3.2rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      color: var(--primary-dark);
+    }
+
+    p {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .subtitle {
+      font-size: 3.2rem;
+      color: var(--text-primary);
+      margin-bottom: 2rem;
+      font-weight: 600;
+    }
+
+    .highlight {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .gradient-text {
+      background: var(--primary-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 700;
+    }
+
+    /* ===== 인용구 ===== */
+    .big-quote {
+      font-size: 4rem;
+      font-style: italic;
+      color: var(--text-primary);
+      border-left: 8px solid var(--primary);
+      padding-left: 2.5rem;
+      margin: 2rem 0;
+      font-weight: 600;
+    }
+
+    .center-quote {
+      font-size: 4.5rem;
+      text-align: center;
+      color: var(--text-primary);
+      font-weight: 700;
+      max-width: 1000px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* ===== 카드 ===== */
+    .card {
+      background: var(--bg-white);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      margin: 1rem 0;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: var(--shadow-sm);
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    .card-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+      margin: 2rem 0;
+    }
+
+    .card-warning {
+      border-color: var(--accent-red);
+      background: rgba(239, 68, 68, 0.05);
+    }
+
+    .card-primary {
+      border-color: var(--primary);
+      background: var(--bg-rose);
+    }
+
+    .card-success {
+      border-color: var(--accent-green);
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    /* ===== 비교 테이블 ===== */
+    .compare-table {
+      width: 100%;
+      margin: 2rem 0;
+    }
+
+    .compare-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .compare-item {
+      padding: 2rem;
+      border-radius: var(--radius-md);
+    }
+
+    .compare-old {
+      background: rgba(0,0,0,0.05);
+      border-left: 6px solid var(--text-secondary);
+    }
+
+    .compare-new {
+      background: var(--bg-rose);
+      border-left: 6px solid var(--primary);
+    }
+
+    /* ===== 리스트 ===== */
+    .list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .list li {
+      font-size: 2.8rem;
+      padding: 1.2rem 0;
+      padding-left: 3rem;
+      position: relative;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .list li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: var(--primary);
+      font-weight: 800;
+      font-size: 2.8rem;
+    }
+
+    /* ===== 타임라인 ===== */
+    .timeline {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin: 3rem 0;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .timeline-item {
+      text-align: center;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .timeline-icon {
+      font-size: 5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .timeline-label {
+      font-size: 2.2rem;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .timeline-value {
+      font-size: 4rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .timeline-arrow {
+      font-size: 4.5rem;
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    /* ===== 코드 블록 ===== */
+    .code-block {
+      background: var(--bg-dark);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      margin: 1.5rem 0;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 2.2rem;
+      overflow-x: auto;
+      color: var(--text-white);
+    }
+
+    .code-block .command {
+      color: #FF6B9D;
+      font-weight: 700;
+    }
+
+    .code-block .comment {
+      color: #A0AEC0;
+    }
+
+    .code-block .result {
+      color: #68D391;
+      font-weight: 600;
+    }
+
+    /* ===== 테이블 ===== */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2rem 0;
+      font-size: 2.2rem;
+      background: var(--bg-white);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    th, td {
+      padding: 1.5rem 2rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+
+    th {
+      background: var(--bg-rose);
+      color: var(--primary-dark);
+      font-weight: 800;
+      font-size: 2.2rem;
+    }
+
+    td {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* ===== 섹션 번호 ===== */
+    .section-number {
+      font-size: 5rem;
+      font-weight: 900;
+      color: rgba(225, 29, 72, 0.1);
+      position: absolute;
+      top: 40px;
+      right: 10%;
+    }
+
+    /* ===== 스텝 ===== */
+    .steps {
+      counter-reset: step;
+    }
+
+    .step {
+      position: relative;
+      padding-left: 6rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      width: 4rem;
+      height: 4rem;
+      background: var(--primary-gradient);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 2rem;
+      color: var(--text-white);
+    }
+
+    /* ===== 플로우 다이어그램 ===== */
+    .flow-vertical {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 2.2rem;
+      margin: 2rem 0;
+      padding: 2.5rem;
+      background: var(--bg-gray);
+      border-radius: var(--radius-md);
+    }
+
+    .flow-item {
+      padding: 1rem 2rem;
+      background: var(--bg-white);
+      border-radius: var(--radius-sm);
+      border: 2px solid rgba(0,0,0,0.1);
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .flow-arrow {
+      color: var(--primary-dark);
+      padding-left: 2rem;
+      font-weight: 800;
+      font-size: 2.2rem;
+    }
+
+    /* ===== 체크리스트 ===== */
+    .checklist {
+      list-style: none;
+      padding: 0;
+    }
+
+    .checklist li {
+      font-size: 2.8rem;
+      padding: 1.5rem 0;
+      padding-left: 3.5rem;
+      position: relative;
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    .checklist li::before {
+      content: "✅";
+      position: absolute;
+      left: 0;
+      font-size: 2.5rem;
+    }
+
+    /* ===== CTA 박스 ===== */
+    .cta-box {
+      background: var(--bg-rose);
+      border: 3px solid var(--primary);
+      border-radius: var(--radius-md);
+      padding: 2.5rem;
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    .cta-box a {
+      color: var(--primary-dark);
+      font-size: 2.5rem;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .cta-box a:hover {
+      text-decoration: underline;
+    }
+
+    /* ===== 태그 ===== */
+    .tag {
+      display: inline-block;
+      background: var(--bg-rose);
+      color: var(--primary-dark);
+      padding: 0.5rem 1.2rem;
+      border-radius: 100px;
+      font-size: 2rem;
+      margin-right: 0.5rem;
+      font-weight: 600;
+    }
+
+    /* ===== 숫자 강조 ===== */
+    .big-number {
+      font-size: 5.5rem;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1;
+    }
+
+    .number-unit {
+      font-size: 2.5rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* ===== 아이콘 그리드 ===== */
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2.5rem;
+      margin: 2rem 0;
+    }
+
+    .icon-item {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .icon-emoji {
+      font-size: 4rem;
+    }
+
+    .icon-text h4 {
+      font-size: 2.5rem;
+      color: var(--text-primary);
+      margin-bottom: 0.3rem;
+      font-weight: 700;
+    }
+
+    .icon-text p {
+      font-size: 2.2rem;
+      color: var(--text-primary);
+      margin: 0;
+      font-weight: 500;
+    }
+
+    /* ===== 루프백 박스 ===== */
+    .loopback-box {
+      background: var(--bg-white);
+      border: 4px solid var(--primary);
+      border-radius: var(--radius-md);
+      padding: 2.5rem;
+      margin: 1.5rem 0;
+      position: relative;
+    }
+
+    .loopback-box::before {
+      content: "🔄";
+      position: absolute;
+      top: -1.2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-white);
+      padding: 0 1rem;
+      font-size: 2.8rem;
+    }
+
+    .loopback-box .loop-item {
+      padding: 0.8rem 0;
+      font-size: 2.2rem;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* ===== 반응형 ===== */
+    @media (max-width: 768px) {
+      .slide {
+        padding: 40px 5%;
+      }
+      h1 { font-size: 2.5rem; }
+      h2 { font-size: 1.8rem; }
+      h3 { font-size: 1.4rem; }
+      p, .list li { font-size: 1.1rem; }
+      .nav { display: none; }
+      .section-number { font-size: 3rem; }
+      .compare-row { grid-template-columns: 1fr; }
+      .card-grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SLIDE #1: 타이틀 -->
+  <section class="slide slide-title" id="slide-1">
+    <h1>바이브 기획</h1>
+    <p class="subtitle">AI 시대, 기획 산출물의 형태가 바뀌어야 한다</p>
+    <p style="margin-top: 3rem; color: var(--text-secondary); font-size: 2rem;">2025.12.06</p>
+  </section>
+
+  <!-- SLIDE #2: 강사 소개 -->
+  <section class="slide slide-alt" id="slide-2">
+    <h2>강사 소개</h2>
+
+    <div class="card card-primary" style="max-width: 800px; padding: 3rem;">
+      <h3 style="font-size: 3.5rem; margin-bottom: 1.5rem;">윤태섭</h3>
+      <p style="font-size: 2.5rem; color: var(--primary); font-weight: 700; margin-bottom: 2rem;">부트페이 CTO</p>
+
+      <div class="icon-grid" style="grid-template-columns: 1fr;">
+        <div class="icon-item">
+          <span class="icon-emoji">💻</span>
+          <div class="icon-text">
+            <h4>개발 경력 15년</h4>
+          </div>
+        </div>
+        <div class="icon-item">
+          <span class="icon-emoji">🚀</span>
+          <div class="icon-text">
+            <h4>1주일에 1 MVP 제작 중</h4>
+          </div>
+        </div>
+        <div class="icon-item">
+          <span class="icon-emoji">📺</span>
+          <div class="icon-text">
+            <h4>YouTube @AI잡돌이</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE #3: 시대가 바뀌었다 -->
+  <section class="slide" id="slide-3">
+    <span class="section-number">도입</span>
+    <h2>충격적인 이야기</h2>
+
+    <p style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 1rem;">40대 판교 개발자, 억대 연봉 받던 분이</p>
+
+    <div class="big-quote" style="font-size: 2.8rem;">
+      "아이디어만 주시면 제가 개발해드릴게요.<br>월 5만원만 구독료 내주세요."
+    </div>
+
+    <div class="card card-primary" style="margin-top: 2rem; max-width: 700px;">
+      <p style="margin: 0; font-size: 2.2rem; color: var(--text-primary); font-weight: 600;">
+        예전에는 기획자가 개발자 눈치 보던 시대<br>
+        <span class="highlight">지금은 개발자가 기획자를 찾는 시대</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #3: 희소 자원의 변화 -->
+  <section class="slide slide-alt" id="slide-3">
+    <h2>희소 자원의 변화</h2>
+
+    <div class="compare-table">
+      <div class="compare-row">
+        <div class="compare-item compare-old">
+          <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">예전</p>
+          <p style="font-size: 2.2rem; margin: 0; font-weight: 600; color: var(--text-primary);">구현 능력 = 희소 자원</p>
+        </div>
+        <div class="compare-item compare-new">
+          <p style="color: var(--primary); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">지금</p>
+          <p style="font-size: 2.2rem; margin: 0; font-weight: 600; color: var(--text-primary);">시니어 몇 명이면 충분</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="center-quote" style="margin-top: 2rem; font-size: 2.2rem;">
+      <span class="highlight">"뭘 만들지 아는 것"</span><br>
+      <span class="highlight">"고객을 이해하는 것"</span><br>
+      <span class="highlight">"문제를 정의하는 것"</span><br><br>
+      <span style="font-size: 2.2rem; color: var(--text-secondary);">= 도메인 지식 = 여러분이 가진 것</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #4: 조건 -->
+  <section class="slide" id="slide-4">
+    <h2>하지만, 조건이 있다</h2>
+
+    <div class="center-quote" style="font-size: 3rem;">
+      기획하는 방식을<br>
+      <span class="gradient-text">바꿔야 합니다</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #5: 개발자들의 속마음 -->
+  <section class="slide slide-alt" id="slide-5">
+    <span class="section-number">Part 1</span>
+    <h2>개발자들의 속마음</h2>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-icon">🚀</div>
+        <div class="timeline-value">하루</div>
+        <div class="timeline-label">프로토타입</div>
+      </div>
+      <div class="timeline-arrow">→</div>
+      <div class="timeline-item">
+        <div class="timeline-icon">📦</div>
+        <div class="timeline-value">이틀</div>
+        <div class="timeline-label">MVP</div>
+      </div>
+      <div class="timeline-arrow">→</div>
+      <div class="timeline-item">
+        <div class="timeline-icon">🎯</div>
+        <div class="timeline-value">일주일</div>
+        <div class="timeline-label">배포</div>
+      </div>
+    </div>
+
+    <div class="center-quote" style="margin-top: 2rem;">
+      "기획도 하루이틀이면<br>되지 않아?"
+    </div>
+
+    <p style="text-align: center; margin-top: 2rem; font-size: 2rem; color: var(--text-secondary);">
+      (진짜 이렇게 생각해요)
+    </p>
+  </section>
+
+  <!-- SLIDE #6: 바이브 코딩 뭐가 다른가 -->
+  <section class="slide" id="slide-6">
+    <h2>바이브 코딩, 뭐가 다른가</h2>
+
+    <div class="card-grid-2">
+      <div class="card">
+        <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">옛날 개발</p>
+        <p style="font-size: 2rem; margin: 0;">설계 → 코딩 → 테스트 → 수정</p>
+        <p style="font-size: 2.2rem; margin-top: 1rem; color: var(--text-secondary);">완벽하게 설계하고, 완벽하게 만들려고 함</p>
+      </div>
+      <div class="card card-primary">
+        <p style="color: var(--primary); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">바이브 코딩</p>
+        <p style="font-size: 2rem; margin: 0;">"이거 만들어줘" → 결과 → "고쳐줘" → 반복</p>
+        <p style="font-size: 2.2rem; margin-top: 1rem; color: var(--primary-dark); font-weight: 600;">일단 만들고, 고치고, 또 고치고</p>
+      </div>
+    </div>
+
+    <div class="big-quote" style="margin-top: 2rem;">
+      완벽하게 설계한 다음에 만드는 게 아니에요.<br>
+      <span class="highlight">만들면서 설계가 구체화되는 거예요.</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #7: 진짜 바이브 기획 -->
+  <section class="slide slide-rose" id="slide-7">
+    <h2>진짜 바이브 기획 =<br><span class="gradient-text">산출물의 형태가 바뀌는 것</span></h2>
+
+    <div class="card-grid-2" style="margin-top: 3rem;">
+      <div class="card" style="padding: 3rem; border: 3px solid var(--text-muted);">
+        <p style="color: var(--text-primary); margin-bottom: 1.5rem; font-size: 2.2rem; font-weight: 800;">❌ 예전 산출물</p>
+        <ul class="list">
+          <li>PPT 50장</li>
+          <li>예쁜 표, 다이어그램</li>
+        </ul>
+        <p style="margin-top: 1.5rem; font-size: 2.5rem; font-weight: 800; color: var(--text-secondary);">
+          👤 사람이 읽기 좋은 형태
+        </p>
+      </div>
+      <div class="card" style="padding: 3rem; border: 3px solid var(--primary); background: white;">
+        <p style="color: var(--primary); margin-bottom: 1.5rem; font-size: 2.2rem; font-weight: 800;">✅ 바이브 시대 산출물</p>
+        <ul class="list">
+          <li>마크다운 문서</li>
+          <li>구조화된 텍스트</li>
+        </ul>
+        <p style="margin-top: 1.5rem; font-size: 2.5rem; font-weight: 800; color: var(--primary);">
+          🤖 AI가 이해하기 좋은 형태
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE #8: AI가 기획서를 읽는다 -->
+  <section class="slide" id="slide-8">
+    <h2>AI가 기획서를 읽는다</h2>
+
+    <div class="compare-table">
+      <div class="compare-row">
+        <div class="compare-item compare-old">
+          <p style="font-size: 2rem; margin: 0; font-weight: 500; color: var(--text-primary);">
+            예전: 기획서를 <strong>개발자가</strong> 읽음<br>
+            → 사람이 이해하기 쉽게, 예쁘게
+          </p>
+        </div>
+        <div class="compare-item compare-new">
+          <p style="font-size: 2rem; margin: 0; font-weight: 600; color: var(--text-primary);">
+            지금: 기획서를 <strong>AI가</strong> 읽음<br>
+            → "이거 만들어줘" 하면 바로 구현
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-primary" style="text-align: center; margin-top: 2rem;">
+      <p style="font-size: 2rem; margin: 0; font-weight: 700;">
+        마크다운으로, 구조화된 텍스트로,<br>
+        <span class="gradient-text">AI가 바로 읽을 수 있게</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #9: 두 가지를 다 해야 한다 -->
+  <section class="slide slide-alt" id="slide-9">
+    <h2>현실: 두 가지를 다 해야 한다</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>전반부</th>
+          <th>후반부</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>마크다운으로 기획하기</td>
+          <td>전통적 산출물로 변환하기</td>
+        </tr>
+        <tr>
+          <td>AI가 읽는 형태로 만들기</td>
+          <td>사람이 읽는 형태로 바꾸기</td>
+        </tr>
+        <tr>
+          <td style="color: var(--primary); font-weight: 700;">핵심 - 새로운 방식</td>
+          <td style="color: var(--text-secondary);">현실 - 회사가 요구하는 것</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SLIDE #10: Claude Code 소개 -->
+  <section class="slide" id="slide-10">
+    <span class="section-number">Part 2</span>
+    <h2>Claude Code: 터미널에서 일하는 AI</h2>
+
+    <div class="card-grid-2">
+      <div class="card">
+        <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">웹 AI (ChatGPT, Claude)</p>
+        <p style="font-size: 2rem; margin: 0;">브라우저에서 채팅</p>
+        <p style="font-size: 2.2rem; margin-top: 1rem; color: var(--text-secondary);">대화 → 복사 → 붙여넣기</p>
+      </div>
+      <div class="card card-primary">
+        <p style="color: var(--primary); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">Claude Code</p>
+        <p style="font-size: 2.2rem; margin: 0;">터미널에서 바로 작업</p>
+        <p style="font-size: 2.2rem; margin-top: 1rem; color: var(--primary-dark); font-weight: 600;">파일을 직접 읽고, 직접 만들어줌</p>
+      </div>
+    </div>
+
+    <div class="big-quote" style="margin-top: 2rem;">
+      복사-붙여넣기가 없어요.<br>
+      <span class="highlight">맥락이 끊기지 않아요.</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #11: 지침 파일 -->
+  <section class="slide slide-alt" id="slide-11">
+    <h2>지침 파일: AI한테 업무 매뉴얼 주기</h2>
+
+    <div class="card-grid-2">
+      <div class="card">
+        <h3 style="font-size: 2rem; color: var(--primary);">CLAUDE.md</h3>
+        <p style="font-size: 2.2rem; color: var(--text-secondary);">프로젝트 전체 지침</p>
+        <ul class="list">
+          <li>"우리 서비스는 이런 거야"</li>
+          <li>"타겟 고객은 이런 사람들이야"</li>
+          <li>"문서는 이런 형식으로 써줘"</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 2rem; color: var(--primary);">rules/하위지침1.md</h3>
+        <p style="font-size: 2.2rem; color: var(--text-secondary);">세부 지침들</p>
+        <ul class="list">
+          <li>기능정의서 작성 규칙</li>
+          <li>페르소나 분석 템플릿</li>
+          <li>세일즈 메시지 포맷</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="big-quote">
+      신입한테 업무 매뉴얼 주는 거랑 똑같아요.<br>
+      <span class="highlight">한 번 잘 만들어두면, 매번 설명 안 해도 됩니다.</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #12: 루프백 -->
+  <section class="slide" id="slide-12">
+    <h2>루프백: 점점 똑똑해지는 지침</h2>
+
+    <p style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 1rem;">지침은 한 번에 완성되지 않아요.</p>
+
+    <div class="loopback-box">
+      <div class="loop-item">1. 일단 지침 써서 시켜본다</div>
+      <div class="loop-item">2. 결과 보고 아쉬운 점 찾는다</div>
+      <div class="loop-item">3. CLAUDE.md 지침에 추가한다</div>
+      <div class="loop-item">4. 새 채팅 열어서 다시 시켜본다</div>
+      <div class="loop-item">5. 반복</div>
+    </div>
+
+    <div class="big-quote">
+      대화하면서 발견한 좋은 패턴을<br>
+      <span class="highlight">지침으로 저장하고, 새 채팅에서 다시 테스트하고, 계속 개선</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #13: Custom Command -->
+  <section class="slide slide-rose" id="slide-13">
+    <h2>Custom Command = 나만의 단축키</h2>
+
+    <div class="card" style="margin-top: 2rem;">
+      <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 2.2rem; font-weight: 600;">매번 물어보는 것:</p>
+      <ul class="list">
+        <li>"서비스 컨셉 정리해줘"</li>
+        <li>"타겟 고객 분석해줘"</li>
+        <li>"핵심 문제랑 해결책 정리해줘"</li>
+      </ul>
+    </div>
+
+    <div class="card card-primary" style="text-align: center; margin-top: 2rem;">
+      <p style="font-size: 2rem; margin: 0;">
+        → <code style="background: var(--bg-dark); color: #FF6B9D; padding: 0.5rem 1.2rem; border-radius: 8px; font-size: 2.2rem; font-weight: 700;">/appkit.new</code> 하나로 끝!
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #14: 데모 -->
+  <section class="slide" id="slide-14">
+    <h2>데모: 명령어 실행</h2>
+
+    <div class="code-block" style="font-size: 2.2rem;">
+      <code><span class="command">/appkit.new</span> 야놀자 같은 테니스 코트 예약 앱</code>
+    </div>
+
+    <h3 style="margin-top: 2rem;">결과 (마크다운):</h3>
+
+    <div class="code-block" style="font-size: 2.2rem;">
+      <pre style="margin: 0; color: #A0AEC0;"># 서비스 개요
+
+| 항목 | 내용 |
+|------|------|
+| 서비스명 | 코트타임 |
+| 핵심 컨셉 | 직장인의 주말 운동을 쉽게 만드는 예약 서비스 |
+| 타겟 고객 | 30-40대 직장인, 테니스 입문자~중급자 |
+| 핵심 문제 | 전화 예약 번거로움, 가격 불투명 |
+| 해결책 | 3초 예약, 실시간 가격 비교 |</pre>
+    </div>
+
+    <p style="margin-top: 1rem; font-size: 2rem; color: var(--primary); font-weight: 600;">
+      이 문서를 그대로 AI한테 줄 수 있어요. "이거 보고 만들어줘"
+    </p>
+  </section>
+
+  <!-- SLIDE #15: 하루 만에 나오는 것들 -->
+  <section class="slide slide-alt" id="slide-15">
+    <h2>하루 만에 나오는 것들</h2>
+
+    <ul class="checklist">
+      <li>서비스 컨셉 문서 (마크다운)</li>
+      <li>기능정의서 (마크다운)</li>
+      <li>페르소나/고객여정 (마크다운)</li>
+      <li>세일즈 메시지 (마크다운)</li>
+      <li>MVP 범위 정의 (마크다운)</li>
+    </ul>
+
+    <div class="card card-primary" style="text-align: center; margin-top: 2rem;">
+      <p style="font-size: 2.2rem; margin: 0; font-weight: 700;">
+        전부 <span class="gradient-text">AI가 바로 읽고 구현할 수 있는 형태</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #16: 솔직한 기대치 -->
+  <section class="slide" id="slide-16">
+    <h2>솔직한 기대치</h2>
+
+    <div class="card card-warning">
+      <p style="font-size: 2.2rem; margin: 0; font-weight: 600;">
+        AI가 뽑아준 건 <span style="color: var(--accent-red);">초안</span>입니다.<br>
+        한 <span style="color: var(--accent-red);">50-60% 정도</span>라고 보시면 돼요.
+      </p>
+    </div>
+
+    <p style="margin-top: 2rem; font-size: 2rem;">검토하고, 맥락 입히고, 다듬어야 해요.</p>
+
+    <div class="big-quote" style="margin-top: 2rem;">
+      이 초안을 기반으로 AI랑 대화하면서 점진적으로 구체화<br>
+      <span class="highlight">대화 내용이 바로 마크다운 파일에 반영 → 바로 구현</span>
+    </div>
+
+    <div class="card card-primary" style="text-align: center; margin-top: 2rem;">
+      <p style="font-size: 2.2rem; margin: 0; font-weight: 700;">
+        마크다운 초안 문서를 개발자한테 넘기는 것<br>
+        = <span class="gradient-text">바이브 기획 산출물</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #17: 전통 산출물 변환 -->
+  <section class="slide slide-alt" id="slide-17">
+    <span class="section-number">Part 3</span>
+    <h2>마크다운 → 전통 산출물</h2>
+
+    <p style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 2rem;">
+      내용은 이미 다 있어요. 형태만 바꾸면 돼요.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3 style="font-size: 2.2rem;">→ 노션</h3>
+        <p style="font-size: 2rem; margin: 0;">"노션에 배포해줘" 하면 됨</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 2.2rem;">→ PPT</h3>
+        <p style="font-size: 2rem; margin: 0;">"슬라이드 구성해줘" 하면 정리됨</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 2.2rem;">→ 기능정의서 양식</h3>
+        <p style="font-size: 2rem; margin: 0;">기능정의서 만들어줘" 하면 정리됨</p>
+      </div>
+    </div>
+
+    <div class="big-quote" style="margin-top: 2rem;">
+      양식을 HTML로 먼저 만들어두세요.<br>
+      <span class="highlight">html → pdf, ppt로 해서 제출</span>
+    </div>
+  </section>
+
+  <!-- SLIDE #18: 순서가 중요하다 -->
+  <section class="slide" id="slide-18">
+    <h2>핵심: 순서가 중요하다</h2>
+
+    <div class="card-grid-2">
+      <div class="card card-warning">
+        <p style="color: var(--accent-red); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">❌ 잘못된 순서</p>
+        <div class="flow-vertical" style="background: rgba(239,68,68,0.05); padding: 1.5rem;">
+          <span style="font-size: 2rem;">처음부터 PPT로 만든다</span>
+          <span class="flow-arrow" style="font-size: 2rem;">→ 수정할 때마다 PPT 수정</span>
+          <span class="flow-arrow" style="font-size: 2rem;">→ 개발자한테 줄 때 또 정리</span>
+          <span class="flow-arrow" style="font-size: 2rem;">→ AI한테 줄 때 또 변환</span>
+        </div>
+      </div>
+      <div class="card card-success">
+        <p style="color: var(--accent-green); margin-bottom: 0.5rem; font-size: 2.2rem; font-weight: 600;">✅ 올바른 순서</p>
+        <div class="flow-vertical" style="background: rgba(16,185,129,0.05); padding: 1.5rem;">
+          <span style="font-size: 2rem;">마크다운으로 먼저 (AI가 읽는 형태)</span>
+          <span class="flow-arrow" style="font-size: 2rem;">→ 수정도 마크다운에서</span>
+          <span class="flow-arrow" style="font-size: 2rem;">→ 개발자한테 줄 때 그대로</span>
+          <span class="flow-arrow" style="font-size: 2rem;">→ 보고용으로만 PPT 변환</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-primary" style="text-align: center; margin-top: 2rem;">
+      <p style="font-size: 2rem; margin: 0; font-weight: 700;">
+        소스는 마크다운, 보고용은 변환해서
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #19: 기획 접근법 플로우 -->
+  <section class="slide slide-alt" id="slide-19">
+    <span class="section-number">Part 4</span>
+    <h2>기획 접근법 플로우</h2>
+
+    <div class="flow-horizontal" style="font-size: 3rem; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5rem; margin: 3rem 0;">
+      <span class="flow-item" style="padding: 1.2rem 2rem;">아이디어</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">컨셉</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">기능</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding:제품을 1.2rem 2rem;">고객여정</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">세일즈</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">MVP</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem; background: var(--bg-rose); border-color: var(--primary);">개발 착수</span>
+    </div>
+
+    <p style="text-align: center; margin-top: 1rem; font-size: 2rem; color: var(--text-secondary);">
+      각 단계마다 <span class="highlight">마크다운 문서가 하나씩</span> 생겨요.
+    </p>
+  </section>
+
+  <!-- SLIDE #20: 루프백 핵심 -->
+  <section class="slide" id="slide-20">
+    <h2>루프백: 이게 핵심이에요</h2>
+
+    <p style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 1rem;">이게 일직선이 아니에요.</p>
+
+    <div class="card" style="padding: 2rem;">
+      <div style="display: flex; gap: 2rem; align-items: flex-start;">
+        <div style="flex: 1;">
+          <p style="font-size: 2.2rem; margin-bottom: 1rem;">[1] 서비스 컨셉</p>
+          <p style="font-size: 2rem; color: var(--text-secondary);">↓ 결과 확인 → 아쉬움 발견</p>
+        </div>
+        <div class="loopback-box" style="flex: 2; margin: 0;">
+          <p style="font-size: 2rem; font-weight: 600; margin-bottom: 1rem;">루프백 사이클</p>
+          <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5rem; font-size: 2.2rem;">
+            <span class="loop-item" style="padding: 0.6rem 1rem;">프롬프트 수정</span>
+            <span style="font-size: 2rem;">→</span>
+            <span class="loop-item" style="padding: 0.6rem 1rem;">다시 실행</span>
+            <span style="font-size: 2rem;">→</span>
+            <span class="loop-item" style="padding: 0.6rem 1rem;">결과 비교</span>
+            <span style="font-size: 2rem;">→</span>
+            <span class="loop-item" style="padding: 0.6rem 1rem;">지침에 반영</span>
+            <span style="font-size: 2rem;">→</span>
+            <span class="loop-item" style="padding: 0.6rem 1rem; background: var(--bg-rose);">🔄 반복</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ul class="list" style="margin-top: 2rem;">
+      <li>결과가 별로? → 프롬프트 고쳐서 다시</li>
+      <li>괜찮아졌어? → 그 프롬프트를 지침에 저장</li>
+      <li>다음에 또 쓸 때? → 저장된 지침으로 바로 실행</li>
+    </ul>
+
+    <p style="text-align: center; margin-top: 2rem; font-size: 2rem; color: var(--primary); font-weight: 700;">
+      점점 똑똑해지는 시스템
+    </p>
+  </section>
+
+  <!-- SLIDE #21: 루프백 예시 -->
+  <section class="slide slide-alt" id="slide-21">
+    <h2>예시: 루프백 돌린 과정</h2>
+
+    <div class="steps">
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem; font-size: 2rem;">처음 시도</h3>
+        <p style="margin: 0; font-size: 2.2rem; color: var(--text-secondary);">"야놀자처럼 테니스 코트 예약하는 앱 기획해줘"</p>
+        <p style="margin: 0.5rem 0 0 0; font-size: 2rem; color: var(--accent-red);">결과: 별로. 너무 일반적.</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem; font-size: 2rem;">루프백 1회차</h3>
+        <p style="margin: 0; font-size: 2.2rem; color: var(--text-secondary);">"서비스 컨셉, 타겟 고객, 핵심 문제, 해결책 정리해줘. 마크다운 표로."</p>
+        <p style="margin: 0.5rem 0 0 0; font-size: 2rem; color: var(--accent-gold);">결과: 좀 나아짐.</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem; font-size: 2rem;">루프백 2회차</h3>
+        <p style="margin: 0; font-size: 2.2rem; color: var(--text-secondary);">"이런 형태로: | 항목 | 내용 | ..."</p>
+        <p style="margin: 0.5rem 0 0 0; font-size: 2rem; color: var(--accent-green);">결과: 원하는 형태!</p>
+      </div>
+      <div class="step">
+        <h3 style="margin-bottom: 0.5rem; font-size: 2rem;">저장 → 명령어로</h3>
+        <p style="margin: 0; font-size: 2.2rem; color: var(--primary); font-weight: 600;">/appkit.new 만 치면 같은 결과</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE #22: 오늘부터 할 수 있는 것 -->
+  <section class="slide" id="slide-22">
+    <h2>오늘부터 할 수 있는 것</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3 style="font-size: 2.2rem; color: var(--primary);">이번 주: 기록하기</h3>
+        <div class="code-block" style="font-size: 2rem; padding: 1.5rem;">
+          <span class="comment">AI한테 뭘 물어봤지?</span><br>
+          → "00 정리해줘"<br><br>
+          <span class="comment">결과가 어땠지?</span><br>
+          → 70% 만족 / 표 형태가 아쉬움<br><br>
+          <span class="comment">다시 어떻게 물어봤지?</span><br>
+          → "마크다운 표로 다시"
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="font-size: 2.2rem; color: var(--primary);">다음 주: 패턴 찾기</h3>
+        <ul class="list">
+          <li>"나 맨날 '표로 정리해줘' 붙이네"</li>
+          <li>"항상 '예시 들어서' 요청하네"</li>
+        </ul>
+        <h3 style="font-size: 2.2rem; color: var(--primary); margin-top: 1.5rem;">그 다음: 템플릿 만들기</h3>
+        <p style="font-size: 2rem;">자주 쓰는 프롬프트를 저장</p>
+      </div>
+    </div>
+
+    <div class="card card-primary" style="text-align: center; margin-top: 2rem;">
+      <p style="font-size: 2.2rem; margin: 0; font-weight: 700;">
+        오늘부터 할 수 있는 가장 작은 행동:<br>
+        <span class="gradient-text">"오늘 AI한테 뭘 물어봤지?" 기록하기</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- SLIDE #23: 핵심 메시지 3가지 -->
+  <section class="slide slide-rose" id="slide-23">
+    <span class="section-number">결론</span>
+    <h2>핵심 메시지 3가지</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <p style="font-size: 3.5rem; margin-bottom: 1rem;">1️⃣</p>
+        <h3 style="font-size: 2rem;">시대가 바뀌었다</h3>
+        <p style="margin: 0; font-size: 2.2rem;">구현 능력 → 시니어 몇 명이면 충분<br>도메인 지식 → 새로운 희소 자원</p>
+      </div>
+      <div class="card">
+        <p style="font-size: 3.5rem; margin-bottom: 1rem;">2️⃣</p>
+        <h3 style="font-size: 2rem;">산출물 형태를 바꾸세요</h3>
+        <p style="margin: 0; font-size: 2.2rem;">PPT → 마크다운<br>사람이 읽는 형태 → AI가 읽는 형태</p>
+      </div>
+      <div class="card">
+        <p style="font-size: 3.5rem; margin-bottom: 1rem;">3️⃣</p>
+        <h3 style="font-size: 2rem;">나만의 방식을 만드세요</h3>
+        <p style="margin: 0; font-size: 2.2rem;">프롬프트 기록 → 패턴 찾기 → 템플릿</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE #24: 마무리 CTA -->
+  <section class="slide slide-title" id="slide-24">
+    <div class="center-quote" style="margin-bottom: 3rem; font-size: 2.2rem;">
+      개발자들은 솔직히 생각해요.<br><br>
+      <span style="font-size: 2.8rem;">"기획도 하루이틀이면 되지 않아?"</span><br><br>
+      <span class="highlight" style="font-size: 2.5rem;">그 질문에 대한 답을 보여주세요.</span>
+    </div>
+
+    <p style="font-size: 2.2rem; color: var(--text-secondary); margin-bottom: 1rem;">
+      산출물의 형태를 바꾸고, 나만의 방식을 만들고,<br>
+      <span class="highlight">진짜 하루이틀 만에 해내는 겁니다.</span>
+    </p>
+
+    <div class="cta-box" style="margin-top: 2rem;">
+      <p style="font-size: 2.2rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">📎 AppKit 오픈소스</p>
+      <a href="https://github.com/rupy1014/appkit" target="_blank">github.com/rupy1014/appkit</a>
+    </div>
+
+    <h1 style="margin-top: 3rem;">도메인 전문가의 시대</h1>
+  </section>
+
+  <script>
+    // 모든 슬라이드 섹션 가져오기
+    const slides = document.querySelectorAll('.slide');
+    let currentSlide = 0;
+
+    // 현재 보이는 슬라이드 찾기
+    function getCurrentVisibleSlide() {
+      const scrollPos = window.scrollY + window.innerHeight / 3;
+      for (let i = slides.length - 1; i >= 0; i--) {
+        if (slides[i].offsetTop <= scrollPos) {
+          return i;
+        }
+      }
+      return 0;
+    }
+
+    // 슬라이드로 이동
+    function goToSlide(index) {
+      if (index >= 0 && index < slides.length) {
+        currentSlide = index;
+        slides[index].scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // 키보드 이벤트
+    document.addEventListener('keydown', (e) => {
+      currentSlide = getCurrentVisibleSlide();
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+        e.preventDefault();
+        goToSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goToSlide(currentSlide - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(slides.length - 1);
+      }
+    });
+
+    // 현재 슬라이드 인디케이터 표시
+    const indicator = document.createElement('div');
+    indicator.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--bg-white);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 4px 12px rgba(225,29,72,0.1);
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 600;
+      z-index: 100;
+    `;
+    document.body.appendChild(indicator);
+
+    function updateIndicator() {
+      currentSlide = getCurrentVisibleSlide();
+      indicator.textContent = `${currentSlide + 1} / ${slides.length}`;
+    }
+
+    window.addEventListener('scroll', updateIndicator);
+    updateIndicator();
+  </script>
+
+</body>
+</html>
