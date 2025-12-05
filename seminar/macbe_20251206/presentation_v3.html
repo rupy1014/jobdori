@@ -599,7 +599,7 @@
         <div class="icon-item">
           <span class="icon-emoji">💻</span>
           <div class="icon-text">
-            <h4>개발 경력 15년</h4>
+            <h4>개발 경력 20년</h4>
           </div>
         </div>
         <div class="icon-item">
@@ -632,7 +632,7 @@
     <div class="card card-primary" style="margin-top: 2rem; max-width: 700px;">
       <p style="margin: 0; font-size: 2.2rem; color: var(--text-primary); font-weight: 600;">
         예전에는 기획자가 개발자 눈치 보던 시대<br>
-        <span class="highlight">지금은 개발자가 기획자를 찾는 시대</span>
+        <span class="highlight">지금은 개발자가 도메인 전문가를 찾는 시대</span>
       </p>
     </div>
   </section>
@@ -838,7 +838,34 @@
     </div>
   </section>
 
-  <!-- SLIDE #11: 지침 파일 -->
+  <!-- SLIDE #11: 기획 접근법 플로우 (전체 지도) -->
+  <section class="slide slide-alt" id="slide-11">
+    <h2>기획 접근법 플로우</h2>
+    <p style="font-size: 2.2rem; color: var(--text-secondary); margin-bottom: 1rem;">먼저 전체 그림을 보여드릴게요.</p>
+
+    <div class="flow-horizontal" style="font-size: 3rem; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5rem; margin: 12rem 0;">
+      <span class="flow-item" style="padding: 1.2rem 2rem;">아이디어</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">컨셉</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">기능</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">고객여정</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">세일즈</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem;">MVP</span>
+      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
+      <span class="flow-item" style="padding: 1.2rem 2rem; background: var(--bg-rose); border-color: var(--primary);">개발 착수</span>
+    </div>
+
+    <p style="text-align: center; margin-top: 1rem; font-size: 2.2rem; color: var(--text-secondary);">
+      각 단계마다 <span class="highlight">마크다운 문서가 하나씩</span> 생겨요.<br>
+      이 과정을 AI한테 어떻게 시키냐면요...
+    </p>
+  </section>
+
+  <!-- SLIDE #12: 지침 파일 -->
   <section class="slide slide-alt" id="slide-11">
     <h2>지침 파일: AI한테 업무 매뉴얼 주기</h2>
 
@@ -848,17 +875,17 @@
         <p style="font-size: 2.2rem; color: var(--text-secondary);">프로젝트 전체 지침</p>
         <ul class="list">
           <li>"우리 서비스는 이런 거야"</li>
-          <li>"타겟 고객은 이런 사람들이야"</li>
-          <li>"문서는 이런 형식으로 써줘"</li>
+          <li>"컨셉은 rules/컨셉.md 참조해"</li>
+          <li>"고객여정은 rules/고객여정.md 참조해"</li>
         </ul>
       </div>
       <div class="card">
-        <h3 style="font-size: 2rem; color: var(--primary);">rules/하위지침1.md</h3>
+        <h3 style="font-size: 2rem; color: var(--primary);">rules/기능.md</h3>
         <p style="font-size: 2.2rem; color: var(--text-secondary);">세부 지침들</p>
         <ul class="list">
           <li>기능정의서 작성 규칙</li>
-          <li>페르소나 분석 템플릿</li>
-          <li>세일즈 메시지 포맷</li>
+          <li>rules/세일즈.md</li>
+          <li>rules/MVP.md</li>
         </ul>
       </div>
     </div>
@@ -873,20 +900,40 @@
   <section class="slide" id="slide-12">
     <h2>루프백: 점점 똑똑해지는 지침</h2>
 
-    <p style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 1rem;">지침은 한 번에 완성되지 않아요.</p>
-
-    <div class="loopback-box">
-      <div class="loop-item">1. 일단 지침 써서 시켜본다</div>
-      <div class="loop-item">2. 결과 보고 아쉬운 점 찾는다</div>
-      <div class="loop-item">3. CLAUDE.md 지침에 추가한다</div>
-      <div class="loop-item">4. 새 채팅 열어서 다시 시켜본다</div>
-      <div class="loop-item">5. 반복</div>
+    <!-- 플로우 미니맵 -->
+    <div class="flow-horizontal" style="font-size: 2.4rem; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5rem; margin: 2rem 0;">
+      <span class="flow-item" style="padding: 0.8rem 1.5rem;">아이디어</span>
+      <span class="flow-arrow" style="font-size: 2rem;">→</span>
+      <span class="flow-item" style="padding: 0.8rem 1.5rem;">컨셉</span>
+      <span class="flow-arrow" style="font-size: 2rem;">→</span>
+      <span class="flow-item" style="padding: 0.8rem 1.5rem;">기능</span>
+      <span class="flow-arrow" style="font-size: 2rem;">→</span>
+      <span class="flow-item" style="padding: 0.8rem 1.5rem;">고객여정</span>
+      <span class="flow-arrow" style="font-size: 2rem;">→</span>
+      <span class="flow-item" style="padding: 0.8rem 1.5rem;">세일즈</span>
+      <span class="flow-arrow" style="font-size: 2rem;">→</span>
+      <span class="flow-item" style="padding: 0.8rem 1.5rem;">MVP</span>
+      <span class="flow-arrow" style="font-size: 2rem;">→</span>
+      <span class="flow-item" style="padding: 0.8rem 1.5rem; background: var(--bg-rose); border-color: var(--primary);">개발 착수</span>
     </div>
 
-    <div class="big-quote">
-      대화하면서 발견한 좋은 패턴을<br>
-      <span class="highlight">지침으로 저장하고, 새 채팅에서 다시 테스트하고, 계속 개선</span>
+    <p style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 1rem;">각 단계의 지침은 한 번에 완성되지 않아요.</p>
+
+    <div class="loopback-box" style="padding: 1.5rem;">
+      <div class="loop-item" style="font-size: 1.8rem; padding: 0.5rem 1rem;">1. 일단 지침 써서 시켜본다</div>
+      <div class="loop-item" style="font-size: 1.8rem; padding: 0.5rem 1rem;">2. 결과 보고 아쉬운 점 찾는다</div>
+      <div class="loop-item" style="font-size: 1.8rem; padding: 0.5rem 1rem;">3. rules/컨셉.md, rules/기능.md 를 개선한다</div>
+      <div class="loop-item" style="font-size: 1.8rem; padding: 0.5rem 1rem;">4. 새 채팅 열어서 다시 시켜본다</div>
+      <div class="loop-item" style="font-size: 1.8rem; padding: 0.5rem 1rem;">5. 반복</div>
     </div>
+
+    <div class="big-quote" style="font-size: 2rem; padding: 1rem 1.5rem; margin-top: 1rem;">
+      대화하면서 발견한 좋은 패턴을 <span class="highlight">지침으로 저장하고, 새 채팅에서 다시 테스트하고, 계속 개선</span>
+    </div>
+
+    <p style="text-align: center; margin-top: 1.5rem; font-size: 2rem; color: var(--text-secondary);">
+      그런데 매번 같은 걸 물어보는 게 귀찮아지면?
+    </p>
   </section>
 
   <!-- SLIDE #13: Custom Command -->
@@ -896,9 +943,9 @@
     <div class="card" style="margin-top: 2rem;">
       <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 2.2rem; font-weight: 600;">매번 물어보는 것:</p>
       <ul class="list">
-        <li>"서비스 컨셉 정리해줘"</li>
-        <li>"타겟 고객 분석해줘"</li>
-        <li>"핵심 문제랑 해결책 정리해줘"</li>
+        <li>"이 아이디어로 누가 어떤 문제를 겪어?"</li>
+        <li>"핵심 가치랑 차별점이 뭐야?"</li>
+        <li>"서비스 컨셉 마크다운으로 정리해줘"</li>
       </ul>
     </div>
 
@@ -917,10 +964,8 @@
       <code><span class="command">/appkit.new</span> 야놀자 같은 테니스 코트 예약 앱</code>
     </div>
 
-    <h3 style="margin-top: 2rem;">결과 (마크다운):</h3>
-
     <div class="code-block" style="font-size: 2.2rem;">
-      <pre style="margin: 0; color: #A0AEC0;"># 서비스 개요
+      <pre style="margin: 0; color: #A0AEC0;"># 서비스 개요.md
 
 | 항목 | 내용 |
 |------|------|
@@ -979,6 +1024,10 @@
         = <span class="gradient-text">바이브 기획 산출물</span>
       </p>
     </div>
+
+    <p style="text-align: center; margin-top: 2rem; font-size: 2rem; color: var(--text-secondary);">
+      그런데 회사에서는 PPT 달라고 하죠?
+    </p>
   </section>
 
   <!-- SLIDE #17: 전통 산출물 변환 -->
@@ -1041,35 +1090,13 @@
         소스는 마크다운, 보고용은 변환해서
       </p>
     </div>
-  </section>
 
-  <!-- SLIDE #19: 기획 접근법 플로우 -->
-  <section class="slide slide-alt" id="slide-19">
-    <span class="section-number">Part 4</span>
-    <h2>기획 접근법 플로우</h2>
-
-    <div class="flow-horizontal" style="font-size: 3rem; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5rem; margin: 3rem 0;">
-      <span class="flow-item" style="padding: 1.2rem 2rem;">아이디어</span>
-      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
-      <span class="flow-item" style="padding: 1.2rem 2rem;">컨셉</span>
-      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
-      <span class="flow-item" style="padding: 1.2rem 2rem;">기능</span>
-      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
-      <span class="flow-item" style="padding:제품을 1.2rem 2rem;">고객여정</span>
-      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
-      <span class="flow-item" style="padding: 1.2rem 2rem;">세일즈</span>
-      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
-      <span class="flow-item" style="padding: 1.2rem 2rem;">MVP</span>
-      <span class="flow-arrow" style="font-size: 2.5rem;">→</span>
-      <span class="flow-item" style="padding: 1.2rem 2rem; background: var(--bg-rose); border-color: var(--primary);">개발 착수</span>
-    </div>
-
-    <p style="text-align: center; margin-top: 1rem; font-size: 2rem; color: var(--text-secondary);">
-      각 단계마다 <span class="highlight">마크다운 문서가 하나씩</span> 생겨요.
+    <p style="text-align: center; margin-top: 2rem; font-size: 2rem; color: var(--text-secondary);">
+      자, 이제 가장 중요한 얘기를 할게요.
     </p>
   </section>
 
-  <!-- SLIDE #20: 루프백 핵심 -->
+  <!-- SLIDE #19: 루프백 핵심 -->
   <section class="slide" id="slide-20">
     <h2>루프백: 이게 핵심이에요</h2>
 
@@ -1117,7 +1144,7 @@
       <div class="step">
         <h3 style="margin-bottom: 0.5rem; font-size: 2rem;">처음 시도</h3>
         <p style="margin: 0; font-size: 2.2rem; color: var(--text-secondary);">"야놀자처럼 테니스 코트 예약하는 앱 기획해줘"</p>
-        <p style="margin: 0.5rem 0 0 0; font-size: 2rem; color: var(--accent-red);">결과: 별로. 너무 일반적.</p>
+        <p style="margin: 0.5rem 0 0 0; font-size: 2rem; color: var(--accent-red);">결과: 별로. 너무 일반적인 이야기.</p>
       </div>
       <div class="step">
         <h3 style="margin-bottom: 0.5rem; font-size: 2rem;">루프백 1회차</h3>
@@ -1158,8 +1185,8 @@
           <li>"나 맨날 '표로 정리해줘' 붙이네"</li>
           <li>"항상 '예시 들어서' 요청하네"</li>
         </ul>
-        <h3 style="font-size: 2.2rem; color: var(--primary); margin-top: 1.5rem;">그 다음: 템플릿 만들기</h3>
-        <p style="font-size: 2rem;">자주 쓰는 프롬프트를 저장</p>
+        <h3 style="font-size: 2.2rem; color: var(--primary); margin-top: 1.5rem;">그 다음: 명령어 만들기</h3>
+        <p style="font-size: 2rem;">AppKit 참고해서 나만의 명령어 만들기</p>
       </div>
     </div>
 
@@ -1217,6 +1244,332 @@
   </section>
 
   <script>
+    // ===== 발표자 노트 데이터 =====
+    const presenterNotes = {
+      1: {
+        title: "타이틀",
+        notes: `(긴장감 있게 시작)
+
+최근에 충격적인 이야기를 들었습니다...`
+      },
+      2: {
+        title: "강사 소개",
+        notes: `간단히 자기소개
+
+- 부트페이 CTO로 20년 개발 경력
+- 요즘 1주일에 1 MVP씩 만들고 있음
+- YouTube에서 AI잡돌이로 활동 중`
+      },
+      3: {
+        title: "충격적인 이야기",
+        notes: `40대 판교 개발자가 제 지인을 찾아왔어요.
+억대 연봉 받던 분입니다.
+
+AI 때문에 재취업이 어려운 상황이셨는데,
+그분이 이런 제안을 했대요.
+
+"지금 하고 계신 업무, 제가 자동화해드릴게요."
+
+(잠시 멈춤)
+
+예전에는 반대였잖아요.
+기획자가 개발자 눈치 보면서 "이거 가능해요?" 물어보고...
+
+세상이 뒤집어졌습니다.`
+      },
+      4: {
+        title: "희소 자원의 변화",
+        notes: `왜 이런 일이 벌어졌을까요?
+
+**구현 능력은 더 이상 희소하지 않아요.**
+
+AI가 코드를 짜고, 디자인을 하고, 심지어 앱도 만들어요.
+"만드는 능력"은 이제 시니어 몇 명만 있으면 되는 시대가 된 거예요.
+
+그러면 뭐가 희소해졌을까요?
+
+이게 도메인 지식이에요. 여러분이 가진 거.
+
+(청중을 바라보며)
+기획자에게 **가장 유리한 시대**가 온 겁니다.`
+      },
+      5: {
+        title: "조건이 있다",
+        notes: `다만, 조건이 있어요.
+
+**기획하는 방식을 바꿔야 합니다.**
+
+어떻게? 그걸 오늘 말씀드리겠습니다.`
+      },
+      6: {
+        title: "개발자들의 속마음",
+        notes: `(솔직하게)
+먼저 불편한 이야기 하나 할게요.
+
+개발자들 속마음 아세요?
+
+요즘 바이브 코딩으로 하루 만에 프로토타입 찍고,
+이틀이면 MVP 만들고, 일주일이면 배포까지 해요.
+
+근데 기획자가 2주 동안 기획서 쓰고 있으면?
+
+(잠시 멈추고)
+틀린 말일까요?`
+      },
+      7: {
+        title: "바이브 코딩, 뭐가 다른가",
+        notes: `개발자들이 왜 그렇게 빠른지 보세요.
+
+핵심이 뭐냐면요,
+
+**완벽하게 설계한 다음에 만드는 게 아니에요.**
+**만들면서 설계가 구체화되는 거예요.**`
+      },
+      8: {
+        title: "진짜 바이브 기획",
+        notes: `(핵심)
+바이브 코딩 시대에는 **기획 산출물도 바뀌어야 해요.**
+
+왜냐면요,
+예전에는 기획서를 **개발자가 읽었잖아요.**
+그래서 사람이 이해하기 쉽게, 예쁘게 만들었죠.
+
+근데 이제는요?
+**AI가 기획서를 읽어요.**
+
+그러면 AI가 이해하기 좋은 형태로 만들어야죠.`
+      },
+      9: {
+        title: "AI가 기획서를 읽는다",
+        notes: `> **마크다운으로, 구조화된 텍스트로, AI가 바로 읽을 수 있게.**
+
+이게 바이브 기획의 핵심이에요.`
+      },
+      10: {
+        title: "두 가지를 다 해야 한다",
+        notes: `물론, 현실이 있죠.
+
+여러분 회사에서는 여전히:
+- 기능정의서가 필요하고
+- 화면설계서가 필요하고
+- 리뷰 프로세스가 있잖아요
+
+50페이지짜리 기획서, 여전히 만들어야 해요.
+
+**두 가지를 다 해야 합니다.**`
+      },
+      11: {
+        title: "Claude Code 소개",
+        notes: `제가 쓰는 도구부터 소개할게요.
+**Claude Code**라는 겁니다.
+
+일반적인 AI 서비스랑 뭐가 다르냐면요.
+
+Claude Code는 다릅니다.
+**터미널에서 바로 작업**해요.
+
+내 프로젝트 폴더에서 대화하면서
+**파일을 직접 읽고, 직접 만들어줍니다.**
+
+복사-붙여넣기가 없어요.
+
+> 왜 이게 중요하냐면,
+> **맥락이 끊기지 않아요.**`
+      },
+      12: {
+        title: "기획 접근법 플로우",
+        notes: `제가 기획할 때 쓰는 플로우를 보여드릴게요.
+
+각 단계마다 **마크다운 문서가 하나씩 생겨요.**
+
+이 과정을 AI한테 어떻게 시키냐면요...`
+      },
+      13: {
+        title: "지침 파일",
+        notes: `그런데 맥락을 기억한다고 끝이 아니에요.
+**어떻게 일하라고 알려줘야** 합니다.
+
+Claude Code에는 **지침 파일**이라는 게 있어요.
+
+> 신입한테 업무 매뉴얼 주는 거랑 똑같아요.
+> **한 번 잘 만들어두면, 매번 설명 안 해도 됩니다.**`
+      },
+      14: {
+        title: "루프백",
+        notes: `여기서 중요한 게 있어요.
+**지침은 한 번에 완성되지 않아요.**
+
+개발자들이 코드 짜는 방식 있잖아요.
+일단 짜고, 에러 나면 고치고, 다시 돌려보고.
+
+지침도 똑같이 해요.
+
+이걸 **루프백**이라고 불러요.
+
+처음엔 지침이 별로여도 괜찮아요.
+3번만 루프백 돌리면 확 달라집니다.`
+      },
+      15: {
+        title: "Custom Command",
+        notes: `그런데 Claude Code의 진짜 힘은
+**Custom Command**에 있어요.
+
+한국말로 하면 **"나만의 단축키"**입니다.
+
+> **매번 AI한테 같은 방식으로 물어보는 게 있다면,**
+> **그걸 명령어 하나로 만들어두는 것.**`
+      },
+      16: {
+        title: "데모",
+        notes: `(직접 시연)
+
+1. 터미널에서 직접 타이핑: /appkit.new 야놀자 같은 테니스 코트 예약 앱
+2. 엔터 치면서: "AI가 작업 중인데, 30초~1분 걸려요"
+3. 솔직하게: "기다리기 아까우니까 미리 만들어둔 결과 보여드릴게요"
+4. VS Code에서 완성된 마크다운 파일 오픈
+
+(강조하며)
+보시면 **마크다운**이에요. PPT가 아니라 텍스트 문서.
+
+이 문서를 그대로 AI한테 줄 수 있어요.`
+      },
+      17: {
+        title: "하루 만에 나오는 것들",
+        notes: `이렇게 하면 **하루 안에**:
+
+- 서비스 컨셉 문서 (마크다운)
+- 기능정의서 (마크다운)
+- 페르소나/고객여정 (마크다운)
+- 세일즈 메시지 (마크다운)
+- MVP 범위 정의 (마크다운)
+
+전부 **AI가 바로 읽을 수 있는 형태**로 나와요.`
+      },
+      18: {
+        title: "솔직한 기대치",
+        notes: `(신뢰 구축)
+근데 솔직히 말씀드릴게요.
+
+**이게 최종본은 아니에요.**
+
+AI가 뽑아준 건 **초안**입니다.
+한 **50-60% 정도**라고 보시면 돼요.
+
+**검토하고, 맥락 입히고, 다듬어야 해요.**
+
+근데요, 이게 핵심이에요.
+**이 초안을 기반으로 AI랑 대화하면서 점진적으로 구체화합니다.**
+
+> **이런 마크다운 초안 문서를 개발자한테 넘기는 것.**
+> **그게 요즘 필요한 바이브 기획 산출물입니다.**`
+      },
+      19: {
+        title: "마크다운 → 전통 산출물",
+        notes: `자, 마크다운으로 기획했어요.
+AI가 읽기 좋은 형태로 만들었어요.
+
+근데 상사한테 보고할 때 마크다운 보여줄 순 없잖아요.
+
+> "이게 뭐야? PPT로 만들어와."
+
+그래서 **변환**이 필요합니다.
+
+좋은 소식은요,
+**마크다운에서 전통 산출물로 바꾸는 건 쉬워요.**
+왜냐면 내용은 이미 다 있거든요. 형태만 바꾸면 돼요.`
+      },
+      20: {
+        title: "순서가 중요하다",
+        notes: `(강조)
+여기서 핵심은 **순서**예요.
+
+**소스는 마크다운, 보고용은 변환해서.**
+이게 바이브 기획의 워크플로우예요.
+
+이유가 있어요.
+1. **마크다운은 수정이 빨라요** - 텍스트니까
+2. **AI가 바로 이해해요** - 개발자한테 줄 때 변환 필요 없음
+3. **변환은 한 번만** - 보고할 때만 PPT로`
+      },
+      21: {
+        title: "루프백 핵심",
+        notes: `근데 중요한 건요,
+**이게 일직선이 아니에요.**
+
+**매 단계에서 이 루프백을 돌려요.**
+
+- 1단계 결과가 별로? → 프롬프트 고쳐서 다시
+- 괜찮아졌어? → 그 프롬프트를 지침에 저장
+- 다음에 또 쓸 때? → 저장된 지침으로 바로 실행
+
+이게 **점점 똑똑해지는 시스템**이에요.`
+      },
+      22: {
+        title: "루프백 예시",
+        notes: `**처음 시도:**
+> "야놀자처럼 테니스 코트 예약하는 앱 기획해줘"
+결과? 별로였어요. 너무 일반적이었어요.
+
+**루프백 1회차:**
+좀 나아졌어요.
+
+**루프백 2회차:**
+이제 원하는 형태가 나왔어요.
+
+**저장 → 명령어로:**
+Custom Command로 만들어서
+/appkit.new만 치면 같은 결과가 나오게.`
+      },
+      23: {
+        title: "오늘부터 할 수 있는 것",
+        notes: `(구체적인 행동)
+
+**이번 주: 기록하기**
+오늘부터 이것만 해보세요:
+메모장에 적어두세요.
+
+**다음 주: 패턴 찾기**
+기록 보면 패턴이 보여요.
+
+**그 다음: 템플릿 만들기**
+자주 쓰는 프롬프트를 저장해두세요.
+
+> **오늘부터 할 수 있는 가장 작은 행동:**
+> **"오늘 AI한테 뭘 물어봤지?" 기록하기**`
+      },
+      24: {
+        title: "핵심 메시지 3가지",
+        notes: `**첫째, 시대가 바뀌었습니다.**
+기획자에게 유리한 시대예요.
+
+**둘째, 산출물의 형태를 바꾸세요.**
+마크다운으로 기획하고, 필요할 때만 전통 양식으로 변환하세요.
+
+**셋째, 나만의 방식을 만드세요.**
+프롬프트를 기록하고, 패턴을 찾고, 템플릿으로 저장하세요.`
+      },
+      25: {
+        title: "마무리",
+        notes: `(진심을 담아)
+
+개발자들은 솔직히 생각해요.
+> "기획도 하루이틀이면 되지 않아?"
+
+그 질문에 대한 답을 보여주세요.
+
+산출물의 형태를 바꾸고,
+나만의 방식을 만들고,
+**진짜 하루이틀 만에 해내는 겁니다.**
+
+> **바이브 기획, 할 수 있습니다.**
+
+감사합니다.`
+      }
+    };
+
+    // ===== BroadcastChannel로 동기화 =====
+    const channel = new BroadcastChannel('presentation-sync');
+
     // 모든 슬라이드 섹션 가져오기
     const slides = document.querySelectorAll('.slide');
     let currentSlide = 0;
@@ -1261,29 +1614,159 @@
 
     // 현재 슬라이드 인디케이터 표시
     const indicator = document.createElement('div');
-    indicator.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: var(--bg-white);
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.08);
-      box-shadow: 0 4px 12px rgba(225,29,72,0.1);
-      color: var(--primary);
-      font-size: 0.9rem;
-      font-weight: 600;
-      z-index: 100;
-    `;
+    indicator.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: var(--bg-white); padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 12px rgba(225,29,72,0.1); color: var(--primary); font-size: 0.9rem; font-weight: 600; z-index: 100;';
     document.body.appendChild(indicator);
 
     function updateIndicator() {
       currentSlide = getCurrentVisibleSlide();
-      indicator.textContent = `${currentSlide + 1} / ${slides.length}`;
+      indicator.textContent = (currentSlide + 1) + ' / ' + slides.length;
     }
 
     window.addEventListener('scroll', updateIndicator);
     updateIndicator();
+
+    // ===== 슬라이드 변경시 발표자 노트 창으로 전송 =====
+    function broadcastSlideChange(slideNum) {
+      // postMessage로 발표자 노트 창에 전송
+      if (presenterWindow && !presenterWindow.closed) {
+        presenterWindow.postMessage({
+          type: 'slideChange',
+          slide: slideNum,
+          notes: presenterNotes[slideNum] || { title: '슬라이드 ' + slideNum, notes: '' }
+        }, '*');
+      }
+    }
+
+    // 스크롤 시 슬라이드 변경 감지하여 broadcast
+    let lastBroadcastedSlide = -1;
+    window.addEventListener('scroll', () => {
+      const current = getCurrentVisibleSlide() + 1;
+      if (current !== lastBroadcastedSlide) {
+        lastBroadcastedSlide = current;
+        broadcastSlideChange(current);
+      }
+    });
+
+    // 키보드로 슬라이드 넘길 때도 broadcast
+    const originalKeyHandler = document.onkeydown;
+    document.addEventListener('keydown', (e) => {
+      // 기존 키보드 핸들러 실행 후 broadcast
+      setTimeout(() => {
+        const current = getCurrentVisibleSlide() + 1;
+        if (current !== lastBroadcastedSlide) {
+          lastBroadcastedSlide = current;
+          broadcastSlideChange(current);
+        }
+      }, 100);
+    });
+
+    // ===== 발표자 노트 창 열기 (P키) =====
+    let presenterWindow = null;
+
+    function openPresenterNotes() {
+      if (presenterWindow && !presenterWindow.closed) {
+        presenterWindow.focus();
+        return;
+      }
+
+      presenterWindow = window.open('', 'presenter-notes', 'width=900,height=700');
+      const initialSlide = getCurrentVisibleSlide() + 1;
+      const initialNotes = presenterNotes[initialSlide] || { title: '', notes: '' };
+
+      const presenterHTML = '<!DOCTYPE html>' +
+'<html lang="ko">' +
+'<head>' +
+'  <meta charset="UTF-8">' +
+'  <title>발표자 노트</title>' +
+'  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+'  <style>' +
+'    * { margin: 0; padding: 0; box-sizing: border-box; }' +
+'    body { font-family: "Noto Sans KR", sans-serif; background: #0a0a0a; color: #fff; padding: 2rem; height: 100vh; display: flex; flex-direction: column; }' +
+'    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 3px solid #E11D48; }' +
+'    .slide-num { font-size: 3rem; font-weight: 800; color: #E11D48; }' +
+'    .slide-title { font-size: 1.3rem; font-weight: 600; color: #fff; margin-left: 1rem; }' +
+'    .meta { text-align: right; }' +
+'    .total { font-size: 1rem; color: #666; }' +
+'    .timer { background: #E11D48; color: white; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 1.5rem; font-weight: 800; margin-top: 0.3rem; display: inline-block; }' +
+'    .slide-preview { position: absolute; top: 1rem; right: 1rem; width: 200px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border: 2px solid #333; }' +
+'    .slide-preview img { width: 100%; border-radius: 6px; display: block; }' +
+'    .notes { flex: 1; background: #1a1a1a; border-radius: 12px; padding: 2rem; overflow-y: auto; margin-top: 1rem; }' +
+'    .notes-content { font-size: 1.4rem; line-height: 1.9; white-space: pre-wrap; color: #eee; }' +
+'    .tip { margin-top: 1rem; font-size: 0.85rem; color: #555; text-align: center; }' +
+'    .tip span { color: #E11D48; }' +
+'  </style>' +
+'</head>' +
+'<body>' +
+'  <div class="slide-preview"><img id="slideImg" src="slides/' + initialSlide + '.png" alt="슬라이드"></div>' +
+'  <div class="header">' +
+'    <div style="display:flex;align-items:baseline;">' +
+'      <div class="slide-num" id="slideNum">' + initialSlide + '</div>' +
+'      <div class="slide-title" id="slideTitle">' + initialNotes.title + '</div>' +
+'    </div>' +
+'    <div class="meta">' +
+'      <div class="total">/ ' + slides.length + '</div>' +
+'      <div class="timer" id="timer">00:00</div>' +
+'    </div>' +
+'  </div>' +
+'  <div class="notes">' +
+'    <div class="notes-content" id="notesContent">' + initialNotes.notes + '</div>' +
+'  </div>' +
+'  <div class="tip">메인 창에서 <span>← →</span> 또는 <span>스페이스바</span>로 넘기기</div>' +
+'  <script>' +
+'    var startTime = Date.now();' +
+'    setInterval(function() {' +
+'      var elapsed = Math.floor((Date.now() - startTime) / 1000);' +
+'      var mins = Math.floor(elapsed / 60).toString().padStart(2, "0");' +
+'      var secs = (elapsed % 60).toString().padStart(2, "0");' +
+'      document.getElementById("timer").textContent = mins + ":" + secs;' +
+'    }, 1000);' +
+'    window.addEventListener("message", function(e) {' +
+'      if (e.data && e.data.type === "slideChange") {' +
+'        document.getElementById("slideNum").textContent = e.data.slide;' +
+'        document.getElementById("slideTitle").textContent = e.data.notes.title;' +
+'        document.getElementById("notesContent").textContent = e.data.notes.notes;' +
+'        document.getElementById("slideImg").src = "slides/" + e.data.slide + ".png";' +
+'      }' +
+'    });' +
+'  <\/script>' +
+'</body>' +
+'</html>';
+
+      presenterWindow.document.write(presenterHTML);
+      presenterWindow.document.close();
+
+      // 초기 슬라이드 정보 전송
+      setTimeout(() => {
+        const current = getCurrentVisibleSlide() + 1;
+        broadcastSlideChange(current);
+      }, 300);
+    }
+
+    // P키로 발표자 노트 창 열기
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        openPresenterNotes();
+      }
+    });
+
+    // 발표자 노트 버튼 추가 (작고 눈에 띄지 않게)
+    const presenterBtn = document.createElement('button');
+    presenterBtn.innerHTML = 'P';
+    presenterBtn.title = '발표자 노트 열기 (P)';
+    presenterBtn.style.cssText = 'position: fixed; bottom: 10px; left: 10px; background: rgba(100,100,100,0.3); color: rgba(255,255,255,0.5); border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 0.8rem; font-weight: 600; cursor: pointer; z-index: 100; font-family: "Noto Sans KR", sans-serif; transition: all 0.2s ease; opacity: 0.4;';
+    presenterBtn.addEventListener('mouseenter', () => {
+      presenterBtn.style.opacity = '1';
+      presenterBtn.style.background = 'var(--primary)';
+      presenterBtn.style.color = 'white';
+    });
+    presenterBtn.addEventListener('mouseleave', () => {
+      presenterBtn.style.opacity = '0.4';
+      presenterBtn.style.background = 'rgba(100,100,100,0.3)';
+      presenterBtn.style.color = 'rgba(255,255,255,0.5)';
+    });
+    presenterBtn.addEventListener('click', openPresenterNotes);
+    document.body.appendChild(presenterBtn);
   </script>
 
 </body>
